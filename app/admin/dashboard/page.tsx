@@ -1,11 +1,14 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 // นำเข้าแพ็กเกจสำหรับวาดกราฟ
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [orgName, setOrgName] = useState('สกร. ระดับอำเภอด่านขุนทด');
   const [stats, setStats] = useState({ total: 0, today: 0 });
   const [quadrantData, setQuadrantData] = useState<any[]>([]);
   const [topArchetypes, setTopArchetypes] = useState<any[]>([]);
@@ -15,104 +18,216 @@ export default function AdminDashboard() {
   const [slowestQuestions, setSlowestQuestions] = useState<any[]>([]);
   const [fastestQuestions, setFastestQuestions] = useState<any[]>([]);
 
+  // 🧘‍♀️ Executive AI Coach chatbot state
+  const [showExecChat, setShowExecChat] = useState(false);
+  const [execMessages, setExecMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [execInput, setExecInput] = useState('');
+  const [execLoading, setExecLoading] = useState(false);
+  const [execOptions, setExecOptions] = useState<string[]>([]);
+
   // โทนสีของ KRUTH DEMM สำหรับกราฟ
   const COLORS = ['#1A3A5C', '#2E75B6', '#F59E0B', '#10B981', '#8B5CF6'];
 
   useEffect(() => {
-    fetchDashboardData();
+    // Access Control check
+    const email = localStorage.getItem('kruth_admin_email');
+    const orgId = localStorage.getItem('kruth_admin_org_id');
+    const storedOrgName = localStorage.getItem('kruth_admin_org_name');
+
+    if (!email || email !== 'dole.dankhunthot@gmail.com' || !orgId) {
+      router.push('/admin');
+      return;
+    }
+
+    if (storedOrgName) {
+      setOrgName(storedOrgName);
+    }
+
+    fetchDashboardData(orgId);
   }, []);
 
-  async function fetchDashboardData() {
-    setLoading(true);
-    
-    // 1. ดึงข้อมูล Results ทั้งหมดพร้อมชื่อ Archetype
-    const { data: results, error } = await supabase
-      .from('results')
-      .select(`
-        id, 
-        created_at, 
-        quadrant_primary,
-        archetype_id,
-        archetypes ( name_th )
-      `)
-      .order('created_at', { ascending: false });
+  const openExecChat = async () => {
+    setShowExecChat(true);
+    if (execMessages.length === 0) {
+      setExecLoading(true);
+      const orgId = localStorage.getItem('kruth_admin_org_id');
+      try {
+        const res = await fetch('/api/admin/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orgId,
+            message: 'สวัสดีค่ะ ช่วยแนะนำตัววิเคราะห์สุขภาวะโดยรวมและให้ข้อเสนอแนะในการบริหารขององค์กรเราหน่อยค่ะ',
+            chatHistory: []
+          })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setExecMessages([
+            { role: 'assistant', content: data.replyText }
+          ]);
+          setExecOptions(data.options);
+        }
+      } catch (err) {
+        console.error("Failed to load exec chat greeting:", err);
+      } finally {
+        setExecLoading(false);
+      }
+    }
+  };
 
-    if (error || !results) {
-      console.error('Error fetching data:', error);
+  const sendExecMessage = async (msgText: string) => {
+    if (!msgText.trim()) return;
+    const orgId = localStorage.getItem('kruth_admin_org_id');
+    const newMessages = [...execMessages, { role: 'user' as const, content: msgText }];
+    setExecMessages(newMessages);
+    setExecInput('');
+    setExecLoading(true);
+
+    try {
+      const res = await fetch('/api/admin/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orgId,
+          message: msgText,
+          chatHistory: newMessages,
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setExecMessages(prev => [...prev, { role: 'assistant', content: data.replyText }]);
+        setExecOptions(data.options);
+      }
+    } catch (err) {
+      console.error("Failed to send exec message:", err);
+    } finally {
+      setExecLoading(false);
+    }
+  };
+
+  async function fetchDashboardData(passedOrgId?: string) {
+    setLoading(true);
+    const orgId = passedOrgId || localStorage.getItem('kruth_admin_org_id');
+    if (!orgId) {
       setLoading(false);
       return;
     }
 
-    // 2. คำนวณสถิติทั่วไป (KPIs)
-    const total = results.length;
-    const today = results.filter(r => new Date(r.created_at).toDateString() === new Date().toDateString()).length;
-    setStats({ total, today });
+    try {
+      // 1. Fetch user ids from org_members for this organization
+      const { data: members } = await supabase
+        .from('org_members')
+        .select('user_id')
+        .eq('org_id', orgId);
 
-    // 3. จัดกลุ่มข้อมูลสำหรับกราฟโดนัท (Quadrant Distribution)
-    const quadCount: Record<string, number> = {};
-    results.forEach(r => {
-      const q = r.quadrant_primary || 'ไม่ระบุ';
-      quadCount[q] = (quadCount[q] || 0) + 1;
-    });
-    
-    const quadrantThaiNames: Record<string, string> = {
-      'Q1': 'นักสำรวจ (Q1)',
-      'Q2': 'นักคิด (Q2)',
-      'Q3': 'ผู้ประสาน (Q3)',
-      'Q4': 'ผู้สร้างสรรค์ (Q4)'
-    };
+      const userIds = (members || []).map(m => m.user_id);
 
-    const parsedQuadrantData = Object.keys(quadCount).map(key => ({
-      name: quadrantThaiNames[key] || key,
-      value: quadCount[key]
-    })).sort((a, b) => b.value - a.value);
-    setQuadrantData(parsedQuadrantData);
+      if (userIds.length === 0) {
+        setStats({ total: 0, today: 0 });
+        setQuadrantData([]);
+        setTopArchetypes([]);
+        setRecentUsers([]);
+        setSlowestQuestions([]);
+        setFastestQuestions([]);
+        setLoading(false);
+        return;
+      }
 
-    // 4. จัดกลุ่มข้อมูลสำหรับกราฟแท่ง (Top Archetypes)
-    const archCount: Record<string, number> = {};
-    results.forEach(r => {
-      // ดึงชื่อไทย ถ้าไม่มีให้ใช้ ID แทน
-      const archName = (r.archetypes as any)?.name_th || r.archetype_id;
-      archCount[archName] = (archCount[archName] || 0) + 1;
-    });
-    const parsedTopArch = Object.keys(archCount)
-      .map(key => ({ name: key, count: archCount[key] }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5); // เอาแค่ Top 5
-    setTopArchetypes(parsedTopArch);
+      // 2. Fetch Results for these users
+      const { data: results, error } = await supabase
+        .from('results')
+        .select(`
+          id, 
+          created_at, 
+          quadrant_primary,
+          archetype_id,
+          session_id,
+          archetypes ( name_th )
+        `)
+        .in('user_id', userIds)
+        .order('created_at', { ascending: false });
 
-    // 5. ข้อมูลล่าสุด 10 รายการสำหรับตาราง
-    setRecentUsers(results.slice(0, 10));
+      if (error || !results) {
+        console.error('Error fetching data:', error);
+        setLoading(false);
+        return;
+      }
 
-    // 🚨 6. ดึงข้อมูลพฤติกรรมการตอบ (Item Analysis)
-    const { data: analytics } = await supabase.from('quiz_analytics').select('question_id, time_spent_ms');
-    
-    if (analytics && analytics.length > 0) {
-      const qStats: Record<string, { totalTime: number; count: number }> = {};
-      
-      // หาผลรวมเวลาและจำนวนคนตอบของแต่ละข้อ
-      analytics.forEach(row => {
-        if (!row.question_id) return;
-        if (!qStats[row.question_id]) qStats[row.question_id] = { totalTime: 0, count: 0 };
-        qStats[row.question_id].totalTime += row.time_spent_ms;
-        qStats[row.question_id].count += 1;
+      // 3. Calculate general KPIs
+      const total = results.length;
+      const today = results.filter(r => new Date(r.created_at).toDateString() === new Date().toDateString()).length;
+      setStats({ total, today });
+
+      // 4. Donut chart data (Quadrant Distribution)
+      const quadCount: Record<string, number> = {};
+      results.forEach(r => {
+        const q = r.quadrant_primary || 'ไม่ระบุ';
+        quadCount[q] = (quadCount[q] || 0) + 1;
       });
+      
+      const quadrantThaiNames: Record<string, string> = {
+        'Q1': 'นักสำรวจ (Q1)',
+        'Q2': 'นักคิด (Q2)',
+        'Q3': 'ผู้ประสาน (Q3)',
+        'Q4': 'ผู้สร้างสรรค์ (Q4)'
+      };
 
-      // คำนวณค่าเฉลี่ยเป็น "วินาที"
-      const qAverages = Object.keys(qStats).map(qId => ({
-        id: qId,
-        avgSec: (qStats[qId].totalTime / qStats[qId].count) / 1000,
-        count: qStats[qId].count
-      })).filter(q => q.count > 0); // เอาเฉพาะข้อที่มีคนตอบ
+      const parsedQuadrantData = Object.keys(quadCount).map(key => ({
+        name: quadrantThaiNames[key] || key,
+        value: quadCount[key]
+      })).sort((a, b) => b.value - a.value);
+      setQuadrantData(parsedQuadrantData);
 
-      // เรียงจากมากไปน้อย (คิดนานสุด)
-      setSlowestQuestions([...qAverages].sort((a, b) => b.avgSec - a.avgSec).slice(0, 5));
-      // เรียงจากน้อยไปมาก (ตอบเร็วสุด)
-      setFastestQuestions([...qAverages].sort((a, b) => a.avgSec - b.avgSec).slice(0, 5));
+      // 5. Bar chart data (Top Archetypes)
+      const archCount: Record<string, number> = {};
+      results.forEach(r => {
+        const archName = (r.archetypes as any)?.name_th || r.archetype_id;
+        archCount[archName] = (archCount[archName] || 0) + 1;
+      });
+      const parsedTopArch = Object.keys(archCount)
+        .map(key => ({ name: key, count: archCount[key] }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+      setTopArchetypes(parsedTopArch);
+
+      // 6. Recent 10 users for table
+      setRecentUsers(results.slice(0, 10));
+
+      // 7. Fetch item analytics filtered by session_ids
+      const sessionIds = results.map(r => r.session_id).filter(Boolean);
+      if (sessionIds.length > 0) {
+        const { data: analytics } = await supabase
+          .from('quiz_analytics')
+          .select('question_id, time_spent_ms')
+          .in('session_id', sessionIds);
+        
+        if (analytics && analytics.length > 0) {
+          const qStats: Record<string, { totalTime: number; count: number }> = {};
+          analytics.forEach(row => {
+            if (!row.question_id) return;
+            if (!qStats[row.question_id]) qStats[row.question_id] = { totalTime: 0, count: 0 };
+            qStats[row.question_id].totalTime += row.time_spent_ms;
+            qStats[row.question_id].count += 1;
+          });
+
+          const qAverages = Object.keys(qStats).map(qId => ({
+            id: qId,
+            avgSec: (qStats[qId].totalTime / qStats[qId].count) / 1000,
+            count: qStats[qId].count
+          })).filter(q => q.count > 0);
+
+          setSlowestQuestions([...qAverages].sort((a, b) => b.avgSec - a.avgSec).slice(0, 5));
+          setFastestQuestions([...qAverages].sort((a, b) => a.avgSec - b.avgSec).slice(0, 5));
+        }
+      }
+    } catch (err) {
+      console.error('fetchDashboardData Error:', err);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
+
 
   // หน้าจอตอนกำลังโหลดข้อมูล
   if (loading) {
@@ -132,11 +247,11 @@ export default function AdminDashboard() {
         <div className="flex flex-col md:flex-row justify-between items-center bg-[#1A3A5C] rounded-2xl p-6 text-white shadow-lg">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold mb-1 flex items-center gap-2">
-              <span>📊</span> KRUTH DEMM Dashboard
+              <span>📊</span> KRUTH DEMM Dashboard — {orgName}
             </h1>
             <p className="text-sm text-blue-200">สรุปข้อมูลผู้ใช้งานระบบประเมินบุคลิกภาพ</p>
           </div>
-          <button onClick={fetchDashboardData} className="mt-4 md:mt-0 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-bold transition-colors">
+          <button onClick={() => fetchDashboardData()} className="mt-4 md:mt-0 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-bold transition-colors">
             🔄 รีเฟรชข้อมูล
           </button>
         </div>
@@ -291,6 +406,103 @@ export default function AdminDashboard() {
         </div>
 
       </div>
+
+      {/* 🧘‍♀️ EXECUTIVE AI COACH FLOATING CHAT WIDGET */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        {/* Chat Panel */}
+        {showExecChat && (
+          <div className="bg-white/95 border border-gray-100 shadow-2xl rounded-2xl w-[90vw] max-w-md h-[500px] flex flex-col mb-4 overflow-hidden animate-fade-in text-left">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#1A3A5C] to-[#1D8B75] text-white p-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">💼</span>
+                <div>
+                  <h3 className="font-bold text-sm">Executive AI Coach</h3>
+                  <p className="text-[0.65rem] text-teal-100">ผู้แนะนำการบริหารและดูแลสุขภาวะองค์กร</p>
+                </div>
+              </div>
+              <button onClick={() => setShowExecChat(false)} className="text-white/80 hover:text-white text-xl">✕</button>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+              {execMessages.map((msg, index) => (
+                <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                  <div className={`max-w-[85%] rounded-2xl p-3.5 text-xs md:text-sm leading-relaxed text-left ${
+                    msg.role === 'user'
+                      ? 'bg-[#1A3A5C] text-white rounded-tr-none'
+                      : 'bg-white text-gray-700 shadow-sm border border-gray-100 rounded-tl-none'
+                  }`}>
+                    {msg.role !== 'user' && (
+                      <span className="font-bold text-[0.65rem] text-[#1D8B75] block mb-1">Executive AI Coach</span>
+                    )}
+                    {msg.content.split('\n').map((line, idx) => (
+                      <span key={idx} className="block mt-0.5">{line}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {execLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white text-gray-400 shadow-sm border rounded-2xl p-3 text-xs flex items-center gap-2">
+                    <span className="animate-pulse">● ● ●</span> บอทกำลังประมวลสถิติและคำตอบ...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Suggestions */}
+            {execOptions.length > 0 && !execLoading && (
+              <div className="px-4 py-2 bg-white border-t flex flex-wrap gap-2 overflow-x-auto">
+                {execOptions.map((opt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => sendExecMessage(opt)}
+                    className="text-xs bg-blue-50 hover:bg-blue-100 border border-blue-100 text-[#1A3A5C] px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap"
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Input Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                sendExecMessage(execInput);
+              }}
+              className="p-3 bg-white border-t flex gap-2"
+            >
+              <input
+                type="text"
+                value={execInput}
+                onChange={(e) => setExecInput(e.target.value)}
+                disabled={execLoading}
+                placeholder="ปรึกษาการบริหารองค์กร/จัดกิจกรรมทีม..."
+                className="flex-1 px-3.5 py-2 border border-gray-200 rounded-xl text-xs md:text-sm focus:outline-none focus:border-[#1D8B75] disabled:bg-gray-50"
+              />
+              <button
+                type="submit"
+                disabled={execLoading || !execInput.trim()}
+                className="px-4 py-2 bg-[#1A3A5C] hover:bg-[#2E75B6] disabled:bg-gray-200 text-white rounded-xl text-xs font-bold transition-colors"
+              >
+                ส่ง
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Floating Bubble Button */}
+        <button
+          onClick={openExecChat}
+          className="flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-[#1A3A5C] to-[#1D8B75] text-white shadow-xl hover:scale-105 transition-transform font-bold text-xs md:text-sm"
+        >
+          <span className="text-base">💼</span> ปรึกษา Executive AI Coach
+        </button>
+      </div>
+
     </div>
   );
 }
