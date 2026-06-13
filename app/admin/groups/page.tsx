@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface Org {
   id: string;
@@ -31,6 +32,9 @@ interface Assignment {
 }
 
 export default function AdminGroupsPage() {
+  const router = useRouter();
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   
@@ -47,8 +51,29 @@ export default function AdminGroupsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // Load organizations on mount
+  // Load organizations and check access on mount
   useEffect(() => {
+    const email = localStorage.getItem('kruth_admin_email');
+    const role = localStorage.getItem('kruth_admin_role');
+    const orgId = localStorage.getItem('kruth_admin_org_id');
+
+    if (!email || (role !== 'org_admin' && role !== 'super_admin')) {
+      router.push('/admin');
+      return;
+    }
+
+    const superCheck = role === 'super_admin';
+    setIsSuperAdmin(superCheck);
+
+    if (!superCheck) {
+      if (orgId) {
+        setSelectedOrgId(orgId);
+      } else {
+        router.push('/admin');
+        return;
+      }
+    }
+
     loadOrgs();
   }, []);
 
@@ -350,7 +375,8 @@ export default function AdminGroupsPage() {
                 <select 
                   value={selectedOrgId} 
                   onChange={e => setSelectedOrgId(e.target.value)} 
-                  className="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:border-[#1A3A5C] outline-none"
+                  disabled={!isSuperAdmin}
+                  className="w-full border rounded-lg p-2.5 text-sm bg-gray-50 focus:border-[#1A3A5C] outline-none disabled:bg-gray-100 disabled:text-gray-500"
                 >
                   <option value="">— เลือกหน่วยงาน —</option>
                   {orgs.map(o => (

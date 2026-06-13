@@ -38,24 +38,38 @@ export default function AdminLogin() {
         return;
       }
 
-      // 2. Strict Check for dole.dankhunthot@gmail.com for Monday sandbox
-      if (!adminData || trimmedEmail !== 'dole.dankhunthot@gmail.com') {
+      // 2. Check if adminData exists
+      if (!adminData) {
         setError('ขออภัย อีเมลนี้ไม่มีสิทธิ์เข้าใช้ระบบผู้บริหารองค์กร');
         setLoading(false);
         return;
       }
 
-      // 3. Save admin credentials to localStorage
-      const orgName = (adminData.organizations as any)?.name || 'สกร. ระดับอำเภอด่านขุนทด';
-      localStorage.setItem('kruth_admin_email', trimmedEmail);
-      localStorage.setItem('kruth_admin_org_id', adminData.org_id);
-      localStorage.setItem('kruth_admin_org_name', orgName);
+      // 3. Determine if it is a Super Admin or Org Admin
+      const isSuper = adminData.role === 'super_admin' || trimmedEmail === 'whootthira@gmail.com';
+      const role = isSuper ? 'super_admin' : 'org_admin';
+      const orgName = isSuper ? 'ส่วนกลาง (Super Admin)' : (adminData.organizations as any)?.name || 'ผู้ดูแลหน่วยงาน';
 
-      setSuccess(`เข้าสู่ระบบสำเร็จ! ยินดีต้อนรับผู้บริหาร ${orgName}`);
+      // 4. Save admin credentials to localStorage
+      localStorage.setItem('kruth_admin_email', trimmedEmail);
+      localStorage.setItem('kruth_admin_role', role);
+      localStorage.setItem('kruth_admin_org_name', orgName);
       
-      // 4. Redirect to Dashboard
+      if (!isSuper) {
+        localStorage.setItem('kruth_admin_org_id', adminData.org_id);
+      } else {
+        localStorage.removeItem('kruth_admin_org_id'); // Super admin has global scope
+      }
+
+      setSuccess(`เข้าสู่ระบบสำเร็จ! ยินดีต้อนรับ ${orgName}`);
+      
+      // 5. Redirect based on role
       setTimeout(() => {
-        router.push('/admin/dashboard');
+        if (isSuper) {
+          router.push('/admin/super-dashboard');
+        } else {
+          router.push('/admin/dashboard');
+        }
       }, 1500);
 
     } catch (err: any) {
@@ -78,8 +92,12 @@ export default function AdminLogin() {
         </div>
 
         {/* Info box */}
-        <div className="mb-6 p-3 bg-teal-50 border border-teal-100 rounded-xl text-left text-xs leading-relaxed text-teal-800">
-          📍 ในการทดสอบระบบ Sandbox รอบวันจันทร์นี้ กำหนดให้ล็อกอินด้วยอีเมล <strong>dole.dankhunthot@gmail.com</strong> เท่านั้น เพื่อเข้าถึงแดชบอร์ด สกร. ระดับอำเภอด่านขุนทด
+        <div className="mb-6 p-3 bg-teal-50 border border-teal-100 rounded-xl text-left text-xs leading-relaxed text-teal-800 space-y-1">
+          <p>📍 <strong>ระบบตรวจสอบสิทธิ์ผู้บริหารองค์กร:</strong></p>
+          <ul className="list-disc pl-4 space-y-0.5">
+            <li>ล็อกอินด้วย <strong>whootthira@gmail.com</strong> เพื่อเข้าสู่หน้า Super Admin</li>
+            <li>ล็อกอินด้วย <strong>dole.dankhunthot@gmail.com</strong> เพื่อเข้าแดชบอร์ด สกร. ด่านขุนทด</li>
+          </ul>
         </div>
 
         {/* Error / Success Alerts */}

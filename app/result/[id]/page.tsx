@@ -50,6 +50,7 @@ function ResultPageInner() {
   });
   const [satiyaOptions, setSatiyaOptions] = useState<string[]>([]);
   const [satiyaLoading, setSatiyaLoading] = useState(false);
+  const [behavioralProfile, setBehavioralProfile] = useState<any>(null);
 
   const openSatiyaChat = async () => {
     setShowSatiyaChat(true);
@@ -113,6 +114,23 @@ function ResultPageInner() {
     }
   };
 
+  const closeSatiyaChat = async () => {
+    setShowSatiyaChat(false);
+    try {
+      const { data: profile } = await supabase
+        .from('satiya_behavioral_profiles')
+        .select('*')
+        .eq('user_id', id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (profile) {
+        setBehavioralProfile(profile);
+      }
+    } catch (err) {
+      console.error("Error refreshing behavioral profile on close:", err);
+    }
+  };
 
   useEffect(() => { trackPageView(`/result/${id}`); loadResult(); }, [id]);
 
@@ -124,6 +142,21 @@ function ResultPageInner() {
     setResult({ ...data, arch: arch || null, user: user || null });
     setLoading(false);
     trackEvent('result_viewed', 'result', { archetype_id: data.archetype_id });
+
+    try {
+      const { data: profile } = await supabase
+        .from('satiya_behavioral_profiles')
+        .select('*')
+        .eq('user_id', id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (profile) {
+        setBehavioralProfile(profile);
+      }
+    } catch (err) {
+      console.error("Error loading behavioral profile:", err);
+    }
 
     if (!isShared) {
       loadSubgroupData(id);
@@ -716,6 +749,37 @@ function ResultPageInner() {
         <div className="text-xs text-gray-400 mt-2 text-center">ยิ่งพื้นที่กราฟแผ่ออกกว้าง แปลว่าคุณมีลักษณะในมิตินั้นเด่นชัด</div>
       </div>
 
+      {/* ═══ SATIYA AI MINI-INSIGHT CARD (GLASSMORPHISM) ═══ */}
+      {behavioralProfile?.delta_report?.ui_reflection_text && (
+        <div className="relative overflow-hidden rounded-2xl p-5 border border-white/40 shadow-xl bg-gradient-to-br from-teal-500/10 via-emerald-500/5 to-[#1A3A5C]/10 backdrop-blur-md mt-3 animate-fade-in">
+          {/* Decorative gradients */}
+          <div className="absolute top-0 right-0 w-24 h-24 bg-teal-400/20 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="relative z-10 flex items-start gap-3.5">
+            <span className="text-3xl flex-shrink-0 mt-0.5 animate-pulse">🧘‍♀️</span>
+            <div className="space-y-1.5 text-left">
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-[#1A3A5C] text-sm tracking-wide">Satiya AI Insight</h4>
+                {behavioralProfile.full_personality_score && (
+                  <span className="bg-teal-500/10 text-teal-800 text-[0.65rem] px-2 py-0.5 rounded-full font-bold border border-teal-200/30">
+                    ดัชนีพฤติกรรม: {behavioralProfile.full_personality_score}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs md:text-sm text-gray-700 leading-relaxed font-medium">
+                &quot;{behavioralProfile.delta_report.ui_reflection_text}&quot;
+              </p>
+              {behavioralProfile.delta_report.primary_divergence && (
+                <div className="text-[0.7rem] text-[#1A3A5C]/80 bg-[#1A3A5C]/5 border border-[#1A3A5C]/10 rounded-lg p-2 mt-2">
+                  <strong>ความสอดคล้องเชิงลึก:</strong> {behavioralProfile.delta_report.primary_divergence}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══ BRIGHT ═══ */}
       {bright && bright !== '⚗️' && (
         <div className="bg-amber-50 rounded-xl p-4 text-center">
@@ -1075,7 +1139,7 @@ function ResultPageInner() {
                   <p className="text-[0.65rem] text-teal-100">ผู้แนะนำและดูแลสุขภาวะส่วนตัวของคุณ</p>
                 </div>
               </div>
-              <button onClick={() => setShowSatiyaChat(false)} className="text-white/80 hover:text-white text-xl">✕</button>
+              <button onClick={closeSatiyaChat} className="text-white/80 hover:text-white text-xl">✕</button>
             </div>
 
             {/* Chat Messages */}

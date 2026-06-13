@@ -19,27 +19,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing orgId or message' }, { status: 400 });
     }
 
-    // 1. Verify organization exists
-    const { data: orgData } = await supabase
-      .from('organizations')
-      .select('name')
-      .eq('id', orgId)
-      .single();
+    let orgName = '';
+    let userIds: string[] = [];
+    let totalMembers = 0;
 
-    if (!orgData) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    if (orgId === 'global') {
+      orgName = 'ภาพรวมระบบทั้งหมด (Super Admin Overview)';
+      // Fetch all distinct user ids who completed the test
+      const { data: allResults } = await supabase.from('results').select('user_id');
+      userIds = Array.from(new Set((allResults || []).map(r => r.user_id)));
+      totalMembers = userIds.length;
+    } else {
+      // 1. Verify organization exists
+      const { data: orgData } = await supabase
+        .from('organizations')
+        .select('name')
+        .eq('id', orgId)
+        .single();
+
+      if (!orgData) {
+        return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+      }
+      orgName = orgData.name;
+
+      // 2. Fetch all members in this organization
+      const { data: members } = await supabase
+        .from('org_members')
+        .select('user_id')
+        .eq('org_id', orgId);
+
+      userIds = (members || []).map(m => m.user_id);
+      totalMembers = userIds.length;
     }
 
-    // 2. Fetch all members in this organization
-    const { data: members } = await supabase
-      .from('org_members')
-      .select('user_id')
-      .eq('org_id', orgId);
-
-    const userIds = (members || []).map(m => m.user_id);
-
     // Default statistics if no users have completed tests yet
-    let totalMembers = userIds.length;
     let avgVitality = 3.0;
     let avgMeaning = 3.0;
     let avgConnection = 3.0;
@@ -98,7 +111,7 @@ export async function POST(req: NextRequest) {
 
     // 5. Construct System Prompt
     const systemPrompt = `คุณคือ Executive AI Coach (ที่ปรึกษาการจัดการระดับบริหารและทรัพยากรบุคคล)
-ทำหน้าที่ให้คำปรึกษาแก่ผู้บริหารขององค์กร: "${orgData.name}"
+ทำหน้าที่ให้คำปรึกษาแก่ผู้บริหารขององค์กร: "${orgName}"
 
 นี่คือสถิติสุขภาวะและการจัดกลุ่มบุคลิกภาพรวมแบบ "ไม่ระบุตัวตน" ของพนักงานทั้งหมดในองค์กร ณ ปัจจุบัน:
 - ยอดจำนวนสมาชิกประเมินแล้ว: ${totalMembers} คน

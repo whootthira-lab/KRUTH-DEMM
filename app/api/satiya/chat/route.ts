@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { processSatiyaMessage, ChatMessage, ChatState } from '@/lib/satiya_coach_engine';
+import { analyzeSpeech8Layers } from '@/lib/satiya_analyzer';
+
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,7 +38,20 @@ export async function POST(req: NextRequest) {
       console.warn("Could not save to satiya_chat_logs (perhaps migration is not run yet):", dbErr);
     }
 
-    // 3. Return response
+    // 3. Trigger 8-Layer Analysis in the background (Non-blocking)
+    const fullHistory = chatHistory
+      .map(m => ({ role: m.role, content: m.content }))
+      .concat({ role: 'user', content: message }, { role: 'assistant', content: result.replyText });
+    
+    const userMsgCount = fullHistory.filter(m => m.role === 'user').length;
+    if (userMsgCount >= 2) {
+      // Run analysis asynchronously so it doesn't block the API response time
+      analyzeSpeech8Layers(userId, 'satiya_session', fullHistory).catch(err => {
+        console.error("Background 8-layer analysis failed:", err);
+      });
+    }
+
+    // 4. Return response
     return NextResponse.json({
       ok: true,
       replyText: result.replyText,

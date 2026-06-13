@@ -24,6 +24,7 @@ export default function AdminDashboard() {
   const [execInput, setExecInput] = useState('');
   const [execLoading, setExecLoading] = useState(false);
   const [execOptions, setExecOptions] = useState<string[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   // โทนสีของ KRUTH DEMM สำหรับกราฟ
   const COLORS = ['#1A3A5C', '#2E75B6', '#F59E0B', '#10B981', '#8B5CF6'];
@@ -33,11 +34,15 @@ export default function AdminDashboard() {
     const email = localStorage.getItem('kruth_admin_email');
     const orgId = localStorage.getItem('kruth_admin_org_id');
     const storedOrgName = localStorage.getItem('kruth_admin_org_name');
+    const role = localStorage.getItem('kruth_admin_role');
 
-    if (!email || email !== 'dole.dankhunthot@gmail.com' || !orgId) {
+    // Allow both regular org_admin and super_admin (who impersonates an orgId)
+    if (!email || !orgId || (role !== 'org_admin' && role !== 'super_admin')) {
       router.push('/admin');
       return;
     }
+
+    setIsSuperAdmin(role === 'super_admin');
 
     if (storedOrgName) {
       setOrgName(storedOrgName);
@@ -251,9 +256,19 @@ export default function AdminDashboard() {
             </h1>
             <p className="text-sm text-blue-200">สรุปข้อมูลผู้ใช้งานระบบประเมินบุคลิกภาพ</p>
           </div>
-          <button onClick={() => fetchDashboardData()} className="mt-4 md:mt-0 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-bold transition-colors">
-            🔄 รีเฟรชข้อมูล
-          </button>
+          <div className="flex gap-2 mt-4 md:mt-0">
+            {isSuperAdmin && (
+              <button 
+                onClick={() => router.push('/admin/super-dashboard')} 
+                className="bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all"
+              >
+                ⬅️ กลับหน้า Super Admin
+              </button>
+            )}
+            <button onClick={() => fetchDashboardData()} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-bold transition-colors">
+              🔄 รีเฟรชข้อมูล
+            </button>
+          </div>
         </div>
 
         {/* KPI Cards */}
