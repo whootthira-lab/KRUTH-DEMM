@@ -1,0 +1,205 @@
+{
+  "project": "Satiya",
+  "version": "1.0",
+  "description": "KRUTH Wellbeing Index (KWI) — Scoring Rules, Pattern Detection, Display Logic, Chatbot Integration",
+  "created": "May 2026",
+  "author": "KRUTH APEX / Di Vi Jitr",
+
+  "assessment": {
+    "name": "KRUTH Wellbeing Index",
+    "abbreviation": "KWI",
+    "total_questions": 25,
+    "dimensions": 5,
+    "estimated_minutes": "5-7",
+    "frequency": "every_3_months",
+    "theoretical_basis": ["PERMA-V (Butler & Kern 2016)", "SDT (Deci & Ryan)", "PsyCap (Luthans)", "Flourishing Scale (Diener)", "Hope Theory (Snyder)"]
+  },
+
+  "dimensions": {
+    "VITALITY": {
+      "questions": ["V1","V2","V3","V4","V5"],
+      "weight": 1.0,
+      "description_th": "พลังชีวิต — พลังงาน การพักผ่อน สุขภาพกาย",
+      "low_signal": "WHO-5 ต่ำ | Burnout | ร่างกายส่งสัญญาณ",
+      "high_signal": "พลังงานดี ฟื้นตัวเร็ว",
+      "demm_link": ["score_n_inverse", "who5", "pdcr"]
+    },
+    "MEANING": {
+      "questions": ["M1","M2","M3","M4","M5"],
+      "weight": 1.2,
+      "description_th": "ความหมาย — Purpose, Values Alignment, Flow",
+      "low_signal": "VIA ต่ำ | Values ขัดแย้งกับงาน | ขาด Why",
+      "high_signal": "รู้จุดประสงค์ชัด | Flow บ่อย",
+      "demm_link": ["via_dominant", "score_o", "archetype_id"]
+    },
+    "CONNECTION": {
+      "questions": ["C1","C2","C3","C4","C5"],
+      "weight": 1.1,
+      "description_th": "ความสัมพันธ์ — สายสัมพันธ์ ความเป็นส่วนหนึ่ง",
+      "low_signal": "Fog Flag | score_e ต่ำ | score_a ต่ำ",
+      "high_signal": "Social support แน่น | รู้สึกเป็นส่วนหนึ่ง",
+      "demm_link": ["score_e", "score_a", "fog_level", "compat_score"]
+    },
+    "MASTERY": {
+      "questions": ["A1","A2","A3","A4","A5"],
+      "weight": 1.1,
+      "description_th": "ความเชี่ยวชาญ — Growth, Competence, Potential",
+      "low_signal": "Fixed Mindset | ขาดโอกาสพัฒนา",
+      "high_signal": "Growth Mindset | กำลังเติบโต",
+      "demm_link": ["score_o", "score_c", "bright_flag", "via_dominant"]
+    },
+    "RESILIENCE": {
+      "questions": ["R1","R2","R3","R4","R5"],
+      "weight": 1.2,
+      "description_th": "ความยืดหยุ่น — ฟื้นตัว Hope ความหวัง",
+      "low_signal": "Rain Flag | score_n สูง | Dysthymia risk",
+      "high_signal": "ฟื้นเร็ว | มีความหวัง | Optimistic",
+      "demm_link": ["score_n_inverse", "rain_level_inverse", "who5"]
+    }
+  },
+
+  "scoring": {
+    "likert5_direct": {
+      "1": 1.0, "2": 2.0, "3": 3.0, "4": 4.0, "5": 5.0
+    },
+    "likert5_reverse": {
+      "1": 5.0, "2": 4.0, "3": 3.0, "4": 2.0, "5": 1.0,
+      "applies_to": ["C5", "R1_inverse_already_labeled"]
+    },
+    "choice_scoring": {
+      "V3": {"เช้า":1.0,"สาย":1.0,"บ่าย":1.0,"เย็น":1.0,"กลางคืน":1.0, "note":"store_as_temporal_data_only"},
+      "V4": {"ไม่มีอาการ":5.0,"ปวดหัว":2.0,"เหนื่อยง่าย":2.0,"นอนไม่หลับ":2.5,"ปวดกล้ามเนื้อ":2.5,"ย่อยไม่ดี":2.5},
+      "V5": {"ดีขึ้นมาก":5.0,"ดีขึ้นนิดหน่อย":4.0,"เหมือนเดิม":3.0,"แย่ลงนิดหน่อย":2.0,"แย่ลงมาก":1.0},
+      "M3": {"ไม่มีเลย":1.0,"1-2 ครั้ง":2.5,"3-5 ครั้ง":3.5,"เกือบทุกวัน":4.5,"ทุกวัน":5.0},
+      "A2": {"ตื่นเต้น อยากลอง":5.0,"กังวลแต่ก็ลองดู":3.5,"กังวลมาก":2.0,"พยายามหลีกเลี่ยง":1.0,"ขึ้นอยู่กับสถานการณ์":3.0},
+      "A3": {"ไม่มีเลย":1.0,"1 เรื่อง":2.5,"2-3 เรื่อง":3.5,"4-5 เรื่อง":4.5,"มากกว่านั้น":5.0},
+      "C1": {"ไม่มีเลย":1.0,"1 คน":2.0,"2-3 คน":3.5,"4-5 คน":4.5,"6 คนขึ้นไป":5.0},
+      "C4": {"เติมพลัง":5.0,"ดีพอกัน":3.5,"ไม่แน่ใจ":2.5,"ดูดพลัง":1.5,"เครียดมาก":1.0},
+      "R3": {"หาคนคุย":4.5,"คิดหาทางออก":4.0,"ออกกำลังกาย/เดิน":4.5,"พักผ่อน":3.5,"หมกตัวคนเดียว":2.0,"ไม่รู้จะทำอะไร":1.0},
+      "R4": {"ภูมิใจที่ผ่านมาได้":5.0,"เรียนรู้แล้วปล่อยวาง":4.5,"บางครั้งยังคิดถึง":3.0,"ยังกังวลอยู่มาก":1.5,"ลืมไปแล้ว":3.5}
+    },
+    "dimension_score": "weighted_avg(question_scores) using question.weight",
+    "kwi_total": "avg(all 5 dimension scores)",
+    "display_as": "percentage_and_bar_not_raw_score"
+  },
+
+  "pattern_detection": {
+    "algorithm": "sequential — check from P005 (critical) to P001 (flourisher)",
+    "rules": [
+      {
+        "pattern_id": "P005",
+        "name": "THE_REBUILDER",
+        "priority": 1,
+        "condition": "resilience < 3.0 AND (vitality < 3.0 OR meaning < 3.0)",
+        "override": "check_clinical_flags_first",
+        "clinical_check": "if rain_level in [orange,red] OR has_crisis → referral_mode"
+      },
+      {
+        "pattern_id": "P004",
+        "name": "THE_DEPLETED_GIVER",
+        "priority": 2,
+        "condition": "connection >= 3.5 AND vitality < 3.0"
+      },
+      {
+        "pattern_id": "P003",
+        "name": "THE_LONELY_ACHIEVER",
+        "priority": 3,
+        "condition": "mastery >= 3.5 AND connection < 3.0"
+      },
+      {
+        "pattern_id": "P002",
+        "name": "THE_MEANING_SEEKER",
+        "priority": 4,
+        "condition": "meaning < 3.0 AND mastery >= 3.5"
+      },
+      {
+        "pattern_id": "P006",
+        "name": "THE_COASTING",
+        "priority": 5,
+        "condition": "all(2.5 <= dim <= 3.5 for dim in [vitality,meaning,connection,mastery,resilience])"
+      },
+      {
+        "pattern_id": "P001",
+        "name": "THE_FLOURISHER",
+        "priority": 6,
+        "condition": "all(dim >= 3.5 for dim in all_dimensions)",
+        "default": true
+      }
+    ]
+  },
+
+  "display_rules": {
+    "overall_badge": {
+      "4.0_to_5.0": {"label":"สภาวะเบ่งบาน","emoji":"🌟","color":"1D8B75","show_percentile":true},
+      "3.0_to_3.99": {"label":"สุขภาวะดี","emoji":"✅","color":"2E75B6"},
+      "2.0_to_2.99": {"label":"กำลังพัฒนา","emoji":"🌱","color":"E36C09"},
+      "below_2.0":   {"label":"ต้องการดูแล","emoji":"💙","color":"C00000","show_referral":true}
+    },
+    "dimension_display": {
+      "format": "pentagon_radar_chart",
+      "labels": "thai_names_only",
+      "show_raw_score": false,
+      "show_percentage": true,
+      "highlight_lowest": true,
+      "highlight_highest": true
+    },
+    "insight_cards": {
+      "max_cards": 3,
+      "priority": "lowest_dimension_first",
+      "tone": "warm_not_clinical",
+      "never_use": ["disorder","โรค","ผิดปกติ","วินิจฉัย"]
+    },
+    "demm_bridge": {
+      "show_if": "demm_complete == true",
+      "content": "archetype_kwi_insight from DEMM_KWI_Matrix sheet",
+      "tone": "reframe_weakness_as_pattern_not_flaw"
+    }
+  },
+
+  "chatbot_integration": {
+    "trigger": "assessment_complete",
+    "model": "claude-sonnet-4-20250514",
+    "system_prompt_template": "คุณคือ Satiya AI Wellbeing Coach\n\nข้อมูลผู้ใช้:\n- ชื่อ: {name}\n- KWI Pattern: {pattern_name} — {pattern_description}\n- คะแนน: Vitality={v} Meaning={m} Connection={c} Mastery={a} Resilience={r}\n- จุดแข็ง: {top_dimension}\n- ต้องการดูแล: {low_dimension}\n- DEMM (ถ้ามี): {archetype_id} | {quadrant} | {via_dominant}\n\nกฎการสนทนา:\n1. อ่าน Pattern และ Chatbot Opening จาก KB ก่อนพูดทุกครั้ง\n2. ฟังก่อนพูด — ถามคำถามปลายเปิดก่อน อย่าเพิ่งแนะนำ\n3. ใช้ภาษาอบอุ่น ไม่ clinical ไม่ตัดสิน\n4. ห้ามใช้คำ: โรค ผิดปกติ วินิจฉัย อาการ\n5. ถ้า Resilience < 2.5 หรือ Pattern=REBUILDER → อ่อนโยนมาก ไม่เร่ง\n6. ถ้า has_crisis=true → 'สายด่วนสุขภาพจิต 1323' ทันที\n7. แนะนำ Theory และ Checklist ต่อเมื่อผู้ใช้พร้อมเท่านั้น",
+    "memory": {
+      "profile_tokens": 200,
+      "rolling_window": 10,
+      "auto_summary_every": 20
+    },
+    "safety": {
+      "if_resilience_below_2": "supportive_mode_no_checklist",
+      "if_meaning_below_2": "explore_before_advise",
+      "if_has_crisis": "immediate_referral_1323",
+      "forbidden_words": ["โรค","ผิดปกติ","วินิจฉัย","อาการ","disorder","pathology"]
+    }
+  },
+
+  "database_schema": {
+    "kwi_responses": {
+      "columns": ["id","user_id","session_id","responses_jsonb","vitality","meaning","connection","mastery","resilience","kwi_total","wellbeing_pattern","peak_hour","coping_style","personal_year","taken_at"],
+      "notes": "peak_hour และ coping_style เก็บแต่ไม่แสดงผล ใช้ temporal analysis เท่านั้น"
+    },
+    "kwi_temporal": {
+      "columns": ["id","user_id","snapshot_month","vitality_avg","meaning_avg","connection_avg","mastery_avg","resilience_avg","kwi_total_avg","pattern","notes"],
+      "update_frequency": "monthly_cron"
+    }
+  },
+
+  "theory_selector": {
+    "P001_FLOURISHER":   ["SD_001","GM_001"],
+    "P002_MEANING":      ["AC_001","SD_001","GM_001"],
+    "P003_LONELY":       ["AT_001","PT_001","PS_001"],
+    "P004_DEPLETED":     ["AC_001","SD_001","HL_001"],
+    "P005_REBUILDER":    ["AC_001","CB_001"],
+    "P006_COASTING":     ["GM_001","SD_001","HL_001"],
+    "override_burnout":  ["AC_001"],
+    "override_ocd":      ["AC_001"],
+    "block_if_rebuilder": ["HL_001","GM_001"]
+  },
+
+  "roadmap": {
+    "phase1": "KWI Assessment + Basic Report + Radar Chart (เดือน 1-3)",
+    "phase2": "AI Chatbot Conversation + Checklist Engine (เดือน 3-6)",
+    "phase3": "Temporal Tracking + Influence Learning (เดือน 6-12)",
+    "phase4": "Academic Validation + n=500 + Publication (ปีที่ 2)"
+  }
+}

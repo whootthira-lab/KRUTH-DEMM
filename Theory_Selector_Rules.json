@@ -1,0 +1,499 @@
+{
+  "version": "1.0",
+  "description": "KRUTH MIND Platform D — Adaptive Psychology Theory Selector",
+  "last_updated": "April 2026",
+  "author": "KRUTH APEX / Di Vi Jitr",
+
+  "meta": {
+    "how_to_use": "เรียก select_theories(user_profile, situation) → ได้ primary + secondary theory → ดึง checklist จาก Psychology_Theories_KB.xlsx",
+    "max_theories_per_session": 2,
+    "contraindication_override": "ถ้า has_crisis=true หรือ rain_level=🔴 → ไม่ใช้ checklist ทั้งหมด ส่งต่อผู้เชี่ยวชาญทันที",
+    "sheets": {
+      "theories": "Theories_Master",
+      "tests": "Situation_Tests",
+      "checklists": "Action_Checklists",
+      "metrics": "Success_Metrics"
+    }
+  },
+
+  "situation_types": [
+    "work_relationship",
+    "team_dynamics",
+    "personal_growth",
+    "conflict_resolution",
+    "habit_building"
+  ],
+
+  "demm_fields": {
+    "score_o": "Openness 1.0-5.0",
+    "score_c": "Conscientiousness 1.0-5.0",
+    "score_e": "Extraversion 1.0-5.0",
+    "score_a": "Agreeableness 1.0-5.0",
+    "score_n": "Neuroticism 1.0-5.0",
+    "quadrant": "Q1|Q2|Q3|Q4",
+    "jungian": "TJ|TP|FJ|FP",
+    "via_dominant": "W|C|H|J|T|Tr",
+    "compat_score": "15-98 (Platform D Hybrid v2.0)",
+    "interaction_weight": "float from user_events_d",
+    "rain_level": "🟡|🟠|🔴|null",
+    "bolt_level": "🟡|🟠|🔴|null",
+    "fog_level": "🟡|🟠|🔴|null",
+    "burnout_level": "🟡|🟠|null",
+    "adhd_level": "🟡|🟠|null",
+    "ocd_level": "🟡|🟠|null",
+    "social_anxiety_level": "🟡|🟠|null",
+    "delusion_level": "🟡|🟠|🔴|null",
+    "has_crisis": "boolean"
+  },
+
+  "global_contraindications": {
+    "has_crisis_true": {
+      "block_all": true,
+      "message": "ตรวจพบสัญญาณวิกฤต — แนะนำสายด่วนสุขภาพจิต 1323 ทันที",
+      "allowed_theories": []
+    },
+    "rain_red": {
+      "block_all": true,
+      "message": "Rain 🔴 — ควรพูดคุยกับผู้เชี่ยวชาญก่อนทำ checklist",
+      "allowed_theories": []
+    },
+    "bolt_red": {
+      "block_all": true,
+      "message": "Bolt 🔴 — พลังงานก้าวร้าวสูงมาก ต้องการผู้เชี่ยวชาญ",
+      "allowed_theories": []
+    },
+    "delusion_orange_or_red": {
+      "block_all": true,
+      "message": "Delusion 🟠/🔴 — ผลการประเมินอาจไม่น่าเชื่อถือ ทำซ้ำกับผู้เชี่ยวชาญก่อน",
+      "allowed_theories": []
+    }
+  },
+
+  "rules": [
+
+    {
+      "rule_id": "R001",
+      "priority": 1,
+      "situation_type": "work_relationship",
+      "label": "TJ กับ FP — Communication Mode Mismatch",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "jungian_user", "op": "starts_with", "value": "T" },
+          { "field": "jungian_other", "op": "starts_with", "value": "F" }
+        ]
+      },
+      "output": {
+        "primary_theory": "TA_001",
+        "secondary_theory": "PT_001",
+        "reason_th": "TJ/TP กับ FJ/FP สื่อสารคนละโหมด — Adult ↔ Adult ลด friction ได้ดีที่สุด ก่อนจะ Perspective Take"
+      },
+      "contraindications": ["social_anxiety_orange"],
+      "expected_duration_days": 14
+    },
+
+    {
+      "rule_id": "R002",
+      "priority": 1,
+      "situation_type": "work_relationship",
+      "label": "N สูง + Compat ต่ำ — Emotional Reactivity",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "score_n", "op": ">=", "value": 3.5 },
+          { "field": "compat_score", "op": "<", "value": 60 }
+        ]
+      },
+      "output": {
+        "primary_theory": "EI_001",
+        "secondary_theory": "GT_001",
+        "reason_th": "N สูง + compat ต่ำ = เสี่ยง Contempt และ Defensiveness — ฝึก EI ก่อน แล้วใช้ Gottman เสริม Positive Ratio"
+      },
+      "contraindications": ["bolt_orange", "bolt_red"],
+      "expected_duration_days": 21
+    },
+
+    {
+      "rule_id": "R003",
+      "priority": 2,
+      "situation_type": "work_relationship",
+      "label": "Q4 Builder กับ Q3 Connector",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "quadrant_user", "op": "==", "value": "Q4" },
+          { "field": "quadrant_other", "op": "==", "value": "Q3" }
+        ]
+      },
+      "output": {
+        "primary_theory": "TA_001",
+        "secondary_theory": "SE_001",
+        "reason_th": "Q4 ชอบทำคนเดียว Q3 ชอบ engage ทีม — TA ช่วยสื่อสาร Adult, SE ช่วยเข้าใจว่าคู่ต้องการอะไรจากความสัมพันธ์นี้"
+      },
+      "contraindications": [],
+      "expected_duration_days": 14
+    },
+
+    {
+      "rule_id": "R004",
+      "priority": 2,
+      "situation_type": "work_relationship",
+      "label": "Q2 Thinker กับ Q1 Explorer",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "quadrant_user", "op": "==", "value": "Q2" },
+          { "field": "quadrant_other", "op": "==", "value": "Q1" },
+          { "field": "score_e", "op": "<", "value": 2.0 }
+        ]
+      },
+      "output": {
+        "primary_theory": "PS_001",
+        "secondary_theory": "PT_001",
+        "reason_th": "Q2 เก็บตัว + E ต่ำ ต้องทำงานกับ Q1 ที่ชอบ engage — สร้าง Psych Safety ก่อนให้ Q2 กล้าแสดงออก"
+      },
+      "contraindications": ["fog_orange"],
+      "expected_duration_days": 21
+    },
+
+    {
+      "rule_id": "R005",
+      "priority": 1,
+      "situation_type": "conflict_resolution",
+      "label": "Compat ต่ำ + Interaction ลด Wellbeing",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "compat_score", "op": "<", "value": 45 },
+          { "field": "interaction_weight", "op": "<", "value": -1.5 }
+        ]
+      },
+      "output": {
+        "primary_theory": "CR_001",
+        "secondary_theory": "AI_001",
+        "reason_th": "Compat ต่ำมาก + interaction ลด wellbeing จริง — ต้องจัดการ conflict ก่อน แล้วค่อย rebuild ด้วย Appreciative Inquiry"
+      },
+      "contraindications": [],
+      "expected_duration_days": 14,
+      "escalation": "ถ้าหลัง 14 วันไม่ดีขึ้น แนะนำ HR Mediation"
+    },
+
+    {
+      "rule_id": "R006",
+      "priority": 1,
+      "situation_type": "work_relationship",
+      "label": "Q4 กับ Critical Parent Manager",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "quadrant_user", "op": "==", "value": "Q4" },
+          { "field": "situation_detail", "op": "contains", "value": "critical_parent" }
+        ]
+      },
+      "output": {
+        "primary_theory": "TA_001",
+        "secondary_theory": "EI_001",
+        "reason_th": "Q4 Builder กับ Manager ที่ Critical Parent — TA ช่วยสื่อสาร Adult mode, EI ช่วยไม่ reactive เมื่อถูกตำหนิ"
+      },
+      "contraindications": [],
+      "expected_duration_days": 14
+    },
+
+    {
+      "rule_id": "R007",
+      "priority": 1,
+      "situation_type": "team_dynamics",
+      "label": "ทีมพลังงานต่ำ — Rain สูง",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "team_rain_pct", "op": ">", "value": 30 },
+          { "field": "team_wellbeing_trend", "op": "==", "value": "declining" }
+        ]
+      },
+      "output": {
+        "primary_theory": "AI_001",
+        "secondary_theory": "PS_001",
+        "reason_th": "ทีมพลังงานต่ำ — Appreciative Inquiry สร้าง positive momentum ก่อน แล้วสร้าง Psych Safety เพื่อรักษาไว้"
+      },
+      "contraindications": ["requires_leader_cooperation"],
+      "expected_duration_days": 21
+    },
+
+    {
+      "rule_id": "R008",
+      "priority": 1,
+      "situation_type": "team_dynamics",
+      "label": "ทีมเก็บตัว ไม่กล้าพูด",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "team_e_avg", "op": "<", "value": 2.5 },
+          { "field": "team_fog_pct", "op": ">", "value": 40 }
+        ]
+      },
+      "output": {
+        "primary_theory": "PS_001",
+        "secondary_theory": "AI_001",
+        "reason_th": "ทีมเก็บตัว + Fog สูง — Psych Safety คือรากฐานที่ต้องสร้างก่อน Leader ต้องเริ่มก่อน"
+      },
+      "contraindications": ["requires_leader_cooperation"],
+      "expected_duration_days": 30
+    },
+
+    {
+      "rule_id": "R009",
+      "priority": 2,
+      "situation_type": "team_dynamics",
+      "label": "Admin ที่ลูกทีมต้านการเปลี่ยนแปลง",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "user_role", "op": "==", "value": "admin" },
+          { "field": "situation_detail", "op": "contains", "value": "change_resistance" }
+        ]
+      },
+      "output": {
+        "primary_theory": "MI_001",
+        "secondary_theory": "AI_001",
+        "reason_th": "ลูกทีมต้านการเปลี่ยนแปลง — MI ดึงแรงจูงใจภายในแทนการบังคับ AI เสริม positive framing"
+      },
+      "contraindications": [],
+      "expected_duration_days": 21
+    },
+
+    {
+      "rule_id": "R010",
+      "priority": 1,
+      "situation_type": "habit_building",
+      "label": "C ต่ำ + ADHD Signal — สร้างโครงสร้าง",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "score_c", "op": "<", "value": 2.5 },
+          { "field": "adhd_level", "op": "in", "value": ["🟡", "🟠"] }
+        ]
+      },
+      "output": {
+        "primary_theory": "HL_001",
+        "secondary_theory": "SD_001",
+        "reason_th": "C ต่ำ + ADHD signal — Habit Loop สร้างโครงสร้างที่เล็กพอทำได้ SD ช่วยหาแรงจูงใจภายในที่ยั่งยืน"
+      },
+      "contraindications": ["adhd_orange_needs_coach"],
+      "expected_duration_days": 21
+    },
+
+    {
+      "rule_id": "R011",
+      "priority": 1,
+      "situation_type": "personal_growth",
+      "label": "N สูง + Burnout — Growth + CBT",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "score_n", "op": ">=", "value": 3.5 },
+          { "field": "burnout_level", "op": "==", "value": "🟡" }
+        ]
+      },
+      "output": {
+        "primary_theory": "GM_001",
+        "secondary_theory": "CB_001",
+        "reason_th": "N สูง + Burnout 🟡 — Growth Mindset ปรับกรอบความเชื่อ CBT แก้ความคิดลบที่ซ้ำๆ"
+      },
+      "contraindications": ["burnout_orange_use_act_first"],
+      "expected_duration_days": 21
+    },
+
+    {
+      "rule_id": "R012",
+      "priority": 1,
+      "situation_type": "personal_growth",
+      "label": "Burnout 🟠 — ACT ก่อนสร้างนิสัย",
+      "conditions": {
+        "operator": "OR",
+        "items": [
+          { "field": "burnout_level", "op": "==", "value": "🟠" },
+          {
+            "operator": "AND",
+            "items": [
+              { "field": "burnout_level", "op": "==", "value": "🟡" },
+              { "field": "score_c", "op": ">=", "value": 4.0 },
+              { "field": "score_n", "op": ">=", "value": 3.5 }
+            ]
+          }
+        ]
+      },
+      "output": {
+        "primary_theory": "AC_001",
+        "secondary_theory": "SD_001",
+        "reason_th": "Burnout 🟠 — ต้องยอมรับสภาพและค้นหา Values ก่อน ห้ามสร้างนิสัยใหม่ก่อน (จะยิ่งหมดไฟ)"
+      },
+      "contraindications": ["HL_001_blocked"],
+      "blocked_theories": ["HL_001", "GM_001"],
+      "expected_duration_days": 28
+    },
+
+    {
+      "rule_id": "R013",
+      "priority": 1,
+      "situation_type": "personal_growth",
+      "label": "OCD Signal + C สูงมาก",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "ocd_level", "op": "==", "value": "🟡" },
+          { "field": "score_c", "op": ">=", "value": 4.0 }
+        ]
+      },
+      "output": {
+        "primary_theory": "AC_001",
+        "secondary_theory": "GM_001",
+        "reason_th": "OCD signal — ACT ช่วย defusion จากความคิดซ้ำได้ดีกว่า CBT ที่อาจเพิ่มการวิเคราะห์ (fuel the OCD)"
+      },
+      "contraindications": ["CB_001_use_with_caution"],
+      "expected_duration_days": 28
+    },
+
+    {
+      "rule_id": "R014",
+      "priority": 2,
+      "situation_type": "personal_growth",
+      "label": "O ต่ำ + C สูง — Fixed Mindset Perfectionist",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "score_o", "op": "<", "value": 2.5 },
+          { "field": "score_c", "op": ">=", "value": 4.0 }
+        ]
+      },
+      "output": {
+        "primary_theory": "GM_001",
+        "secondary_theory": "AC_001",
+        "reason_th": "O ต่ำ + C สูง = Fixed Mindset + Perfectionism — Growth Mindset เปิดประตูก่อน ACT ช่วย defuse จาก self-judgment"
+      },
+      "contraindications": [],
+      "expected_duration_days": 21
+    },
+
+    {
+      "rule_id": "R015",
+      "priority": 1,
+      "situation_type": "personal_growth",
+      "label": "Social Anxiety + E ต่ำมาก",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "social_anxiety_level", "op": "==", "value": "🟡" },
+          { "field": "score_e", "op": "<=", "value": 1.5 }
+        ]
+      },
+      "output": {
+        "primary_theory": "CB_001",
+        "secondary_theory": "AT_001",
+        "reason_th": "Social Anxiety — CBT แก้ Cognitive Distortion เรื่องการถูกตัดสิน, Attachment ช่วยเข้าใจรูปแบบความสัมพันธ์ที่กลัว"
+      },
+      "contraindications": ["GT_001_too_intense", "PS_001_too_intense"],
+      "blocked_theories": ["GT_001"],
+      "expected_duration_days": 21
+    },
+
+    {
+      "rule_id": "R016",
+      "priority": 2,
+      "situation_type": "personal_growth",
+      "label": "VIA=Transcendence + Rain 🟡",
+      "conditions": {
+        "operator": "AND",
+        "items": [
+          { "field": "via_dominant", "op": "==", "value": "Tr" },
+          { "field": "rain_level", "op": "==", "value": "🟡" }
+        ]
+      },
+      "output": {
+        "primary_theory": "AC_001",
+        "secondary_theory": "SD_001",
+        "reason_th": "VIA=Tr (เหนือตน) + Rain — คนที่แสวงหาความหมายตอบสนอง ACT ได้ดีมาก Values-based living ช่วยลด Rain"
+      },
+      "contraindications": [],
+      "expected_duration_days": 28
+    },
+
+    {
+      "rule_id": "R017",
+      "priority": 3,
+      "situation_type": "work_relationship",
+      "label": "Default — ไม่ตรงกับ Rule ไหน",
+      "conditions": {
+        "operator": "DEFAULT",
+        "items": []
+      },
+      "output": {
+        "primary_theory": "EI_001",
+        "secondary_theory": "PT_001",
+        "reason_th": "Default: EI + Perspective Taking เป็นฐานที่ใช้ได้กับทุกสถานการณ์ความสัมพันธ์"
+      },
+      "contraindications": [],
+      "expected_duration_days": 14
+    },
+
+    {
+      "rule_id": "R018",
+      "priority": 3,
+      "situation_type": "personal_growth",
+      "label": "Default Personal Growth",
+      "conditions": {
+        "operator": "DEFAULT",
+        "items": []
+      },
+      "output": {
+        "primary_theory": "GM_001",
+        "secondary_theory": "HL_001",
+        "reason_th": "Default: Growth Mindset เป็นรากฐาน + Habit Loop สำหรับลงมือทำ"
+      },
+      "contraindications": [],
+      "expected_duration_days": 21
+    }
+  ],
+
+  "selector_algorithm": {
+    "description": "วิธีเลือก Theory ที่ถูกต้อง",
+    "steps": [
+      "1. ตรวจ global_contraindications ก่อนเสมอ — ถ้า has_crisis หรือ Rain🔴 → หยุด ส่งต่อทันที",
+      "2. classify situation_type จาก chat context",
+      "3. วน loop rules ตาม priority (1 ก่อน)",
+      "4. ตรวจ conditions ทุกข้อใน rule — ถ้าผ่านทั้งหมด → เลือก rule นี้",
+      "5. ตรวจ contraindications ของ rule ที่เลือก",
+      "6. ถ้าไม่มี rule ตรง → ใช้ DEFAULT rule",
+      "7. ส่ง primary + secondary theory ไปสร้าง checklist",
+      "8. load situation_test จาก Sheet2 ก่อน",
+      "9. load action_checklist จาก Sheet3",
+      "10. track progress ใน psychology_checklists table"
+    ]
+  },
+
+  "theory_metadata": {
+    "TA_001": { "name_th": "Transactional Analysis", "duration_days": 14, "sheet2_test": "T001" },
+    "GT_001": { "name_th": "Gottman's Method", "duration_days": 21, "sheet2_test": "T002" },
+    "AT_001": { "name_th": "Attachment Theory", "duration_days": 30, "sheet2_test": null },
+    "PS_001": { "name_th": "Psychological Safety", "duration_days": 30, "sheet2_test": "T010" },
+    "SE_001": { "name_th": "Social Exchange Theory", "duration_days": 14, "sheet2_test": null },
+    "HL_001": { "name_th": "Habit Loop", "duration_days": 21, "sheet2_test": "T003" },
+    "GM_001": { "name_th": "Growth Mindset", "duration_days": 14, "sheet2_test": "T005" },
+    "SD_001": { "name_th": "Self-Determination Theory", "duration_days": 21, "sheet2_test": null },
+    "CB_001": { "name_th": "Cognitive Behavioral Therapy", "duration_days": 21, "sheet2_test": "T007" },
+    "AC_001": { "name_th": "Acceptance & Commitment", "duration_days": 28, "sheet2_test": "T009" },
+    "EI_001": { "name_th": "Emotional Intelligence", "duration_days": 21, "sheet2_test": "T004" },
+    "PT_001": { "name_th": "Perspective Taking", "duration_days": 14, "sheet2_test": "T006" },
+    "CR_001": { "name_th": "Conflict Resolution", "duration_days": 14, "sheet2_test": "T008" },
+    "AI_001": { "name_th": "Appreciative Inquiry", "duration_days": 21, "sheet2_test": null },
+    "MI_001": { "name_th": "Motivational Interviewing", "duration_days": 21, "sheet2_test": null }
+  },
+
+  "chatbot_prompts": {
+    "after_theory_selected": "จากบุคลิกของคุณและสถานการณ์นี้ ทฤษฎีที่เหมาะสมที่สุดคือ {theory_name_th} เพราะ {reason_th} ก่อนเริ่ม Checklist ขอให้ทดสอบสถานการณ์สั้นๆ ก่อนนะคะ",
+    "checklist_reminder": "สวัสดีค่ะ วันนี้ครบ {days_since_start} วันของ {theory_name} แล้ว ทำ Action ข้อ {next_action} ได้แล้วหรือยังคะ? [✅ ทำแล้ว] [⏳ ยังไม่ได้ทำ] [❓ มีปัญหา]",
+    "mid_checklist_check": "ครึ่งทางแล้วค่ะ! {completed_pct}% เสร็จแล้ว ความสัมพันธ์กับ{target_person}ดีขึ้นบ้างไหม? [😊 ดีขึ้น] [🔄 เหมือนเดิม] [😔 แย่ลง]",
+    "checklist_complete": "🎉 ครบ {theory_name} แล้วค่ะ! จาก {pre_score} → {post_score} ถัดไปอยากลองทฤษฎีอื่นเพื่อพัฒนาต่อไหม?",
+    "escalation_message": "ดูเหมือนสถานการณ์นี้อาจต้องการความช่วยเหลือจากผู้เชี่ยวชาญด้านจิตวิทยาค่ะ ระบบแนะนำให้พูดคุยกับ HR หรือนักจิตวิทยาโดยตรง"
+  }
+}

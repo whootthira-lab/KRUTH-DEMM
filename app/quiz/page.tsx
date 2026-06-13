@@ -25,6 +25,7 @@ function QuizPageInner() {
   const band = (sp.get('band') || 'E') as Band;
   const refId = sp.get('ref') || '';
   const refSrc = sp.get('src') || '';
+  const lineUserId = sp.get('line_user_id') || sp.get('line_id') || '';
 
   // ═══ STATE ═══
   const [phase, setPhase] = useState<Phase>('register');
@@ -46,6 +47,11 @@ function QuizPageInner() {
   const [provinces, setProvinces] = useState<string[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
 
+  // Organizations
+  const [orgsList, setOrgsList] = useState<{ id: string; name: string; org_code: string }[]>([]);
+  const [orgOption, setOrgOption] = useState('');
+  const [customOrg, setCustomOrg] = useState('');
+
   // Quiz
   const [allQs, setAllQs] = useState<Question[]>([]);
   const [activeQs, setActiveQs] = useState<Question[]>([]);
@@ -64,7 +70,21 @@ function QuizPageInner() {
   const [encIdx, setEncIdx] = useState(0);
   const [showBreathing, setShowBreathing] = useState(false);
 
-  useEffect(() => { trackPageView('/quiz'); loadRegions(); }, []);
+  useEffect(() => { 
+    trackPageView('/quiz'); 
+    loadRegions(); 
+    loadOrganizations();
+  }, []);
+
+  // ═══ LOAD ORGANIZATIONS ═══
+  async function loadOrganizations() {
+    try {
+      const { data } = await supabase.from('organizations').select('id, name, org_code').order('name');
+      if (data) setOrgsList(data);
+    } catch (e) {
+      console.error('Error loading organizations:', e);
+    }
+  }
 
   // ═══ LOAD REGIONS ═══
   async function loadRegions() {
@@ -85,6 +105,13 @@ function QuizPageInner() {
     if (!day || !month || !year || !fname || !lname || !gender || !province) {
       setRegErr('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return;
     }
+    
+    // ตรวจสอบข้อมูลหน่วยงาน
+    const orgNameToSend = orgOption === 'OTHER' ? customOrg.trim() : (orgsList.find(o => o.org_code === orgOption)?.name || '');
+    if (!orgOption || (orgOption === 'OTHER' && !orgNameToSend)) {
+      setRegErr('กรุณาเลือกหรือระบุหน่วยงานของคุณ'); return;
+    }
+
     if (idcard && idcard.length !== 13) { setRegErr('เลขบัตรประชาชนต้อง 13 หลัก'); return; }
     if (!pdpa) { setRegErr('กรุณายินยอม PDPA ก่อนทำแบบประเมิน'); return; }
 
@@ -99,6 +126,8 @@ function QuizPageInner() {
           province, referrerId: refId, referralSource: refSrc,
           deviceType: getDeviceType(), browser: getBrowser(),
           referrerUrl: typeof document !== 'undefined' ? document.referrer : '',
+          organization: orgNameToSend,
+          lineUserId: lineUserId
         }),
       });
       const data = await res.json();
@@ -340,6 +369,24 @@ function QuizPageInner() {
           <option value="">— เลือกจังหวัด —</option>
           {provinces.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
+
+        <label className="text-xs font-semibold text-gray-700 block mt-3 mb-1">หน่วยงาน / โรงเรียน <span className="text-red-500">*</span></label>
+        <select value={orgOption} onChange={e => setOrgOption(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
+          <option value="">— เลือกหน่วยงาน —</option>
+          {orgsList.map(o => (
+            <option key={o.id} value={o.org_code}>{o.name}</option>
+          ))}
+          <option value="OTHER">อื่นๆ โปรดระบุ...</option>
+        </select>
+
+        {orgOption === 'OTHER' && (
+          <input 
+            value={customOrg} 
+            onChange={e => setCustomOrg(e.target.value)} 
+            placeholder="โปรดระบุชื่อหน่วยงานของคุณ" 
+            className="w-full border rounded-lg p-2 text-sm mt-1.5 focus:border-brand focus:ring-1 focus:ring-brand outline-none" 
+          />
+        )}
 
         {/* PDPA */}
         <div className="bg-gray-50 rounded-lg p-3 mt-4 text-[0.68rem] text-gray-500 leading-relaxed max-h-28 overflow-y-auto border">

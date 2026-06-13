@@ -1,0 +1,702 @@
+{
+  "theories": [],
+  "theory_mappings": [],
+  "wellbeing_patterns": [
+    {
+      "pattern_id": "P001",
+      "pattern_name": "THE FLOURISHER",
+      "pattern_name_th": "ผู้เบ่งบาน",
+      "criteria_formula": "vitality>=3.5 AND meaning>=3.5 AND connection>=3.5 AND mastery>=3.5 AND resilience>=3.5",
+      "demm_archetype_match": "ไม่จำกัด Archetype",
+      "core_description": "คุณอยู่ในสภาวะ Flourishing — ทุกมิติสมดุล เติบโต และมีความหมาย นี่คือสภาวะที่จิตวิทยาเรียกว่า 'ชีวิตที่ดี'",
+      "strength_th": "สมดุลรอบด้าน | พลังงานดี | ความสัมพันธ์แน่น | กำลังเติบโต",
+      "challenge_th": "อาจชะล่าใจ | ต้องท้าทายตัวเองต่อไป",
+      "chatbot_opening": "สุดยอดเลยครับ! คุณอยู่ใน 'สภาวะเบ่งบาน' ที่นักจิตวิทยาเรียกว่า Flourishing ตอนนี้อยากต่อยอดไปในทิศทางไหนครับ?",
+      "recommended_theories": "SD_001,GM_001",
+      "short_term_action": "ท้าทายตัวเองด้วยเป้าหมายที่ใหญ่ขึ้น | หาคนที่จะ grow ด้วยกัน",
+      "long_term_direction": "Generativity — ส่งต่อและสร้างคุณค่าให้คนรอบข้าง",
+      "color_code": "FF1D8B75"
+    },
+    {
+      "pattern_id": "P002",
+      "pattern_name": "THE MEANING-SEEKER",
+      "pattern_name_th": "นักแสวงหาความหมาย",
+      "criteria_formula": "meaning<3.0 AND mastery>=3.5",
+      "demm_archetype_match": "Q2-TP, Q4-TJ, Q2-TJ",
+      "core_description": "คุณทำสิ่งต่างๆ ได้ดี มีความสามารถชัดเจน แต่บางทีทำไปโดยไม่รู้ว่า 'เพื่ออะไร' ความสามารถโดยปราศจากความหมาย = Hollow Achievement",
+      "strength_th": "เก่งและมีความสามารถ | ผลลัพธ์ดี | วินัยสูง",
+      "challenge_th": "ขาด 'ทำไม' ที่ชัดเจน | อาจรู้สึกว่าชีวิตซ้ำซาก | เสี่ยง Burnout ระยะยาว",
+      "chatbot_opening": "คุณมีความสามารถที่ชัดเจนมากครับ แต่ผมอยากถามว่า... ทั้งหมดที่ทำอยู่ มันตอบโจทย์อะไรในชีวิตของคุณครับ?",
+      "recommended_theories": "AC_001,SD_001,GM_001",
+      "short_term_action": "เขียน Values 3 ข้อที่สำคัญที่สุด | ตรวจว่างานปัจจุบันสอดคล้องไหม",
+      "long_term_direction": "Ikigai exploration — หาจุดที่ชอบ เก่ง และโลกต้องการมาบรรจบกัน",
+      "color_code": "E6A817"
+    },
+    {
+      "pattern_id": "P003",
+      "pattern_name": "THE LONELY ACHIEVER",
+      "pattern_name_th": "ผู้ประสบความสำเร็จที่โดดเดี่ยว",
+      "criteria_formula": "mastery>=3.5 AND connection<3.0",
+      "demm_archetype_match": "Q4-TJ, Q2-TJ, Q2-TP",
+      "core_description": "ผลงานดีเยี่ยม แต่ข้างในอาจรู้สึกว่า 'ไม่มีใครเข้าใจจริงๆ' ความสำเร็จที่ไม่มีคนแบ่งปัน ไม่สมบูรณ์",
+      "strength_th": "เก่งมาก | เป็นระบบ | ผลลัพธ์ที่วัดได้",
+      "challenge_th": "Connection ต่ำ | เสี่ยงโดดเดี่ยวระยะยาว | อาจขาด Celebration",
+      "chatbot_opening": "ความสามารถของคุณชัดมากครับ แต่ผมอยากถามว่า... มีคนที่คุณแบ่งปัน 'ความสำเร็จ' เหล่านี้ด้วยบ้างไหมครับ?",
+      "recommended_theories": "AT_001,PT_001,PS_001",
+      "short_term_action": "นัด 1:1 Deep Conversation กับคนที่ไว้ใจ 1 คน/สัปดาห์",
+      "long_term_direction": "สร้าง Genuine Connection ไม่ใช่แค่ Network",
+      "color_code": "FF2E75B6"
+    },
+    {
+      "pattern_id": "P004",
+      "pattern_name": "THE DEPLETED GIVER",
+      "pattern_name_th": "ผู้ให้ที่กำลังหมดแรง",
+      "criteria_formula": "connection>=3.5 AND vitality<3.0",
+      "demm_archetype_match": "Q3-FJ, Q3-FP, Q1-FJ",
+      "core_description": "คุณเติมพลังให้คนอื่นได้ดีมาก แต่ถังน้ำของตัวเองกำลังใกล้หมด Compassion Fatigue กำลังสะสม",
+      "strength_th": "ดูแลคนอื่นเก่ง | ความสัมพันธ์ดี | ทีมชอบ",
+      "challenge_th": "พลังงานตัวเองต่ำ | เสี่ยง Burnout จาก Overgiving | ขาด Self-care",
+      "chatbot_opening": "คุณดูแลคนอื่นได้ดีมากครับ แต่ผมอยากถามตรงๆ ว่า... ใครดูแลคุณบ้างครับ?",
+      "recommended_theories": "AC_001,SD_001,HL_001",
+      "short_term_action": "วางแผน 'ชั่วโมงคืนพลัง' ให้ตัวเองอย่างน้อย 1 ชม./วัน",
+      "long_term_direction": "Sustainable Giving — เติมตัวเองก่อน เพื่อให้ได้นานขึ้น",
+      "color_code": "FFE36C09"
+    },
+    {
+      "pattern_id": "P005",
+      "pattern_name": "THE REBUILDER",
+      "pattern_name_th": "ผู้กำลังสร้างใหม่",
+      "criteria_formula": "resilience<3.0 AND (vitality<3.0 OR meaning<3.0)",
+      "demm_archetype_match": "ทุก Archetype ในช่วง transition",
+      "core_description": "คุณกำลังอยู่ในช่วงที่หนัก แต่การที่ยังมาตอบคำถามนี้ได้แปลว่าคุณยังสู้อยู่ ช่วงนี้คือการ 'รื้อเพื่อสร้างใหม่'",
+      "strength_th": "มีความกล้าลึกๆ | ยังไม่ยอมแพ้ | กำลังเรียนรู้",
+      "challenge_th": "พลังงานต่ำ | ความหวังริบหรี่ | ต้องการ support",
+      "chatbot_opening": "ขอบคุณที่ไว้วางใจมาตอบนะครับ ผมอยากให้รู้ว่าสิ่งที่คุณรู้สึกอยู่นั้น... สมเหตุสมผลมากเลยครับ อยากเล่าให้ฟังบ้างไหมว่าช่วงนี้เป็นอย่างไร?",
+      "recommended_theories": "AC_001,CB_001,GT_001",
+      "short_term_action": "โฟกัสแค่ 'วันนี้' หนึ่งสิ่งเล็กๆ ที่ทำให้ดีขึ้นได้",
+      "long_term_direction": "Post-traumatic Growth — วิกฤตที่ผ่านพ้นได้คือรากฐานที่แข็งแกร่งที่สุด",
+      "color_code": "FFC00000"
+    },
+    {
+      "pattern_id": "P006",
+      "pattern_name": "THE COASTING",
+      "pattern_name_th": "นักเดินหมาก",
+      "criteria_formula": "vitality BETWEEN 2.5 AND 3.5 AND meaning BETWEEN 2.5 AND 3.5 AND connection BETWEEN 2.5 AND 3.5",
+      "demm_archetype_match": "Q4-TP, Q3-FP",
+      "core_description": "ชีวิตโอเค ปลอดภัย แต่อาจรู้สึกว่า 'มีอะไรบางอย่างที่ขาดหายไป' โดยบอกไม่ได้ว่าคืออะไร Languishing ไม่ใช่ซึมเศร้า แต่ก็ไม่ใช่ Flourishing",
+      "strength_th": "มั่นคง | ปรับตัวได้ | ไม่ค่อยมีวิกฤต",
+      "challenge_th": "ไม่ค่อยตื่นเต้นกับชีวิต | ไม่เติบโต | รู้สึกเฉยๆ กับทุกอย่าง",
+      "chatbot_opening": "ฟังดู 'โอเค' ทุกด้านนะครับ แต่บางทีความ 'โอเค' ก็คือสัญญาณว่ามีอะไรบางอย่างที่เรายังไม่ได้ค้นพบ คุณรู้สึกแบบนั้นบ้างไหมครับ?",
+      "recommended_theories": "GM_001,SD_001,HL_001",
+      "short_term_action": "ลองทำสิ่งที่ 'ไม่เคยลอง' อย่างน้อย 1 อย่างใน 14 วันนี้",
+      "long_term_direction": "Zest — เพิ่มความตื่นเต้นและการค้นหาตัวเองใหม่",
+      "color_code": "FF888888"
+    }
+  ],
+  "kwi_scoring_rules": {
+    "project": "Satiya",
+    "version": "1.0",
+    "description": "KRUTH Wellbeing Index (KWI) — Scoring Rules, Pattern Detection, Display Logic, Chatbot Integration",
+    "created": "May 2026",
+    "author": "KRUTH APEX / Di Vi Jitr",
+    "assessment": {
+      "name": "KRUTH Wellbeing Index",
+      "abbreviation": "KWI",
+      "total_questions": 25,
+      "dimensions": 5,
+      "estimated_minutes": "5-7",
+      "frequency": "every_3_months",
+      "theoretical_basis": [
+        "PERMA-V (Butler & Kern 2016)",
+        "SDT (Deci & Ryan)",
+        "PsyCap (Luthans)",
+        "Flourishing Scale (Diener)",
+        "Hope Theory (Snyder)"
+      ]
+    },
+    "dimensions": {
+      "VITALITY": {
+        "questions": [
+          "V1",
+          "V2",
+          "V3",
+          "V4",
+          "V5"
+        ],
+        "weight": 1,
+        "description_th": "พลังชีวิต — พลังงาน การพักผ่อน สุขภาพกาย",
+        "low_signal": "WHO-5 ต่ำ | Burnout | ร่างกายส่งสัญญาณ",
+        "high_signal": "พลังงานดี ฟื้นตัวเร็ว",
+        "demm_link": [
+          "score_n_inverse",
+          "who5",
+          "pdcr"
+        ]
+      },
+      "MEANING": {
+        "questions": [
+          "M1",
+          "M2",
+          "M3",
+          "M4",
+          "M5"
+        ],
+        "weight": 1.2,
+        "description_th": "ความหมาย — Purpose, Values Alignment, Flow",
+        "low_signal": "VIA ต่ำ | Values ขัดแย้งกับงาน | ขาด Why",
+        "high_signal": "รู้จุดประสงค์ชัด | Flow บ่อย",
+        "demm_link": [
+          "via_dominant",
+          "score_o",
+          "archetype_id"
+        ]
+      },
+      "CONNECTION": {
+        "questions": [
+          "C1",
+          "C2",
+          "C3",
+          "C4",
+          "C5"
+        ],
+        "weight": 1.1,
+        "description_th": "ความสัมพันธ์ — สายสัมพันธ์ ความเป็นส่วนหนึ่ง",
+        "low_signal": "Fog Flag | score_e ต่ำ | score_a ต่ำ",
+        "high_signal": "Social support แน่น | รู้สึกเป็นส่วนหนึ่ง",
+        "demm_link": [
+          "score_e",
+          "score_a",
+          "fog_level",
+          "compat_score"
+        ]
+      },
+      "MASTERY": {
+        "questions": [
+          "A1",
+          "A2",
+          "A3",
+          "A4",
+          "A5"
+        ],
+        "weight": 1.1,
+        "description_th": "ความเชี่ยวชาญ — Growth, Competence, Potential",
+        "low_signal": "Fixed Mindset | ขาดโอกาสพัฒนา",
+        "high_signal": "Growth Mindset | กำลังเติบโต",
+        "demm_link": [
+          "score_o",
+          "score_c",
+          "bright_flag",
+          "via_dominant"
+        ]
+      },
+      "RESILIENCE": {
+        "questions": [
+          "R1",
+          "R2",
+          "R3",
+          "R4",
+          "R5"
+        ],
+        "weight": 1.2,
+        "description_th": "ความยืดหยุ่น — ฟื้นตัว Hope ความหวัง",
+        "low_signal": "Rain Flag | score_n สูง | Dysthymia risk",
+        "high_signal": "ฟื้นเร็ว | มีความหวัง | Optimistic",
+        "demm_link": [
+          "score_n_inverse",
+          "rain_level_inverse",
+          "who5"
+        ]
+      }
+    },
+    "scoring": {
+      "likert5_direct": {
+        "1": 1,
+        "2": 2,
+        "3": 3,
+        "4": 4,
+        "5": 5
+      },
+      "likert5_reverse": {
+        "1": 5,
+        "2": 4,
+        "3": 3,
+        "4": 2,
+        "5": 1,
+        "applies_to": [
+          "C5",
+          "R1_inverse_already_labeled"
+        ]
+      },
+      "choice_scoring": {
+        "V3": {
+          "เช้า": 1,
+          "สาย": 1,
+          "บ่าย": 1,
+          "เย็น": 1,
+          "กลางคืน": 1,
+          "note": "store_as_temporal_data_only"
+        },
+        "V4": {
+          "ไม่มีอาการ": 5,
+          "ปวดหัว": 2,
+          "เหนื่อยง่าย": 2,
+          "นอนไม่หลับ": 2.5,
+          "ปวดกล้ามเนื้อ": 2.5,
+          "ย่อยไม่ดี": 2.5
+        },
+        "V5": {
+          "ดีขึ้นมาก": 5,
+          "ดีขึ้นนิดหน่อย": 4,
+          "เหมือนเดิม": 3,
+          "แย่ลงนิดหน่อย": 2,
+          "แย่ลงมาก": 1
+        },
+        "M3": {
+          "ไม่มีเลย": 1,
+          "1-2 ครั้ง": 2.5,
+          "3-5 ครั้ง": 3.5,
+          "เกือบทุกวัน": 4.5,
+          "ทุกวัน": 5
+        },
+        "A2": {
+          "ตื่นเต้น อยากลอง": 5,
+          "กังวลแต่ก็ลองดู": 3.5,
+          "กังวลมาก": 2,
+          "พยายามหลีกเลี่ยง": 1,
+          "ขึ้นอยู่กับสถานการณ์": 3
+        },
+        "A3": {
+          "ไม่มีเลย": 1,
+          "1 เรื่อง": 2.5,
+          "2-3 เรื่อง": 3.5,
+          "4-5 เรื่อง": 4.5,
+          "มากกว่านั้น": 5
+        },
+        "C1": {
+          "ไม่มีเลย": 1,
+          "1 คน": 2,
+          "2-3 คน": 3.5,
+          "4-5 คน": 4.5,
+          "6 คนขึ้นไป": 5
+        },
+        "C4": {
+          "เติมพลัง": 5,
+          "ดีพอกัน": 3.5,
+          "ไม่แน่ใจ": 2.5,
+          "ดูดพลัง": 1.5,
+          "เครียดมาก": 1
+        },
+        "R3": {
+          "หาคนคุย": 4.5,
+          "คิดหาทางออก": 4,
+          "ออกกำลังกาย/เดิน": 4.5,
+          "พักผ่อน": 3.5,
+          "หมกตัวคนเดียว": 2,
+          "ไม่รู้จะทำอะไร": 1
+        },
+        "R4": {
+          "ภูมิใจที่ผ่านมาได้": 5,
+          "เรียนรู้แล้วปล่อยวาง": 4.5,
+          "บางครั้งยังคิดถึง": 3,
+          "ยังกังวลอยู่มาก": 1.5,
+          "ลืมไปแล้ว": 3.5
+        }
+      },
+      "dimension_score": "weighted_avg(question_scores) using question.weight",
+      "kwi_total": "avg(all 5 dimension scores)",
+      "display_as": "percentage_and_bar_not_raw_score"
+    },
+    "pattern_detection": {
+      "algorithm": "sequential — check from P005 (critical) to P001 (flourisher)",
+      "rules": [
+        {
+          "pattern_id": "P005",
+          "name": "THE_REBUILDER",
+          "priority": 1,
+          "condition": "resilience < 3.0 AND (vitality < 3.0 OR meaning < 3.0)",
+          "override": "check_clinical_flags_first",
+          "clinical_check": "if rain_level in [orange,red] OR has_crisis → referral_mode"
+        },
+        {
+          "pattern_id": "P004",
+          "name": "THE_DEPLETED_GIVER",
+          "priority": 2,
+          "condition": "connection >= 3.5 AND vitality < 3.0"
+        },
+        {
+          "pattern_id": "P003",
+          "name": "THE_LONELY_ACHIEVER",
+          "priority": 3,
+          "condition": "mastery >= 3.5 AND connection < 3.0"
+        },
+        {
+          "pattern_id": "P002",
+          "name": "THE_MEANING_SEEKER",
+          "priority": 4,
+          "condition": "meaning < 3.0 AND mastery >= 3.5"
+        },
+        {
+          "pattern_id": "P006",
+          "name": "THE_COASTING",
+          "priority": 5,
+          "condition": "all(2.5 <= dim <= 3.5 for dim in [vitality,meaning,connection,mastery,resilience])"
+        },
+        {
+          "pattern_id": "P001",
+          "name": "THE_FLOURISHER",
+          "priority": 6,
+          "condition": "all(dim >= 3.5 for dim in all_dimensions)",
+          "default": true
+        }
+      ]
+    },
+    "display_rules": {
+      "overall_badge": {
+        "4.0_to_5.0": {
+          "label": "สภาวะเบ่งบาน",
+          "emoji": "🌟",
+          "color": "1D8B75",
+          "show_percentile": true
+        },
+        "3.0_to_3.99": {
+          "label": "สุขภาวะดี",
+          "emoji": "✅",
+          "color": "2E75B6"
+        },
+        "2.0_to_2.99": {
+          "label": "กำลังพัฒนา",
+          "emoji": "🌱",
+          "color": "E36C09"
+        },
+        "below_2.0": {
+          "label": "ต้องการดูแล",
+          "emoji": "💙",
+          "color": "C00000",
+          "show_referral": true
+        }
+      },
+      "dimension_display": {
+        "format": "pentagon_radar_chart",
+        "labels": "thai_names_only",
+        "show_raw_score": false,
+        "show_percentage": true,
+        "highlight_lowest": true,
+        "highlight_highest": true
+      },
+      "insight_cards": {
+        "max_cards": 3,
+        "priority": "lowest_dimension_first",
+        "tone": "warm_not_clinical",
+        "never_use": [
+          "disorder",
+          "โรค",
+          "ผิดปกติ",
+          "วินิจฉัย"
+        ]
+      },
+      "demm_bridge": {
+        "show_if": "demm_complete == true",
+        "content": "archetype_kwi_insight from DEMM_KWI_Matrix sheet",
+        "tone": "reframe_weakness_as_pattern_not_flaw"
+      }
+    },
+    "chatbot_integration": {
+      "trigger": "assessment_complete",
+      "model": "claude-sonnet-4-20250514",
+      "system_prompt_template": "คุณคือ Satiya AI Wellbeing Coach\n\nข้อมูลผู้ใช้:\n- ชื่อ: {name}\n- KWI Pattern: {pattern_name} — {pattern_description}\n- คะแนน: Vitality={v} Meaning={m} Connection={c} Mastery={a} Resilience={r}\n- จุดแข็ง: {top_dimension}\n- ต้องการดูแล: {low_dimension}\n- DEMM (ถ้ามี): {archetype_id} | {quadrant} | {via_dominant}\n\nกฎการสนทนา:\n1. อ่าน Pattern และ Chatbot Opening จาก KB ก่อนพูดทุกครั้ง\n2. ฟังก่อนพูด — ถามคำถามปลายเปิดก่อน อย่าเพิ่งแนะนำ\n3. ใช้ภาษาอบอุ่น ไม่ clinical ไม่ตัดสิน\n4. ห้ามใช้คำ: โรค ผิดปกติ วินิจฉัย อาการ\n5. ถ้า Resilience < 2.5 หรือ Pattern=REBUILDER → อ่อนโยนมาก ไม่เร่ง\n6. ถ้า has_crisis=true → 'สายด่วนสุขภาพจิต 1323' ทันที\n7. แนะนำ Theory และ Checklist ต่อเมื่อผู้ใช้พร้อมเท่านั้น",
+      "memory": {
+        "profile_tokens": 200,
+        "rolling_window": 10,
+        "auto_summary_every": 20
+      },
+      "safety": {
+        "if_resilience_below_2": "supportive_mode_no_checklist",
+        "if_meaning_below_2": "explore_before_advise",
+        "if_has_crisis": "immediate_referral_1323",
+        "forbidden_words": [
+          "โรค",
+          "ผิดปกติ",
+          "วินิจฉัย",
+          "อาการ",
+          "disorder",
+          "pathology"
+        ]
+      }
+    },
+    "database_schema": {
+      "kwi_responses": {
+        "columns": [
+          "id",
+          "user_id",
+          "session_id",
+          "responses_jsonb",
+          "vitality",
+          "meaning",
+          "connection",
+          "mastery",
+          "resilience",
+          "kwi_total",
+          "wellbeing_pattern",
+          "peak_hour",
+          "coping_style",
+          "personal_year",
+          "taken_at"
+        ],
+        "notes": "peak_hour และ coping_style เก็บแต่ไม่แสดงผล ใช้ temporal analysis เท่านั้น"
+      },
+      "kwi_temporal": {
+        "columns": [
+          "id",
+          "user_id",
+          "snapshot_month",
+          "vitality_avg",
+          "meaning_avg",
+          "connection_avg",
+          "mastery_avg",
+          "resilience_avg",
+          "kwi_total_avg",
+          "pattern",
+          "notes"
+        ],
+        "update_frequency": "monthly_cron"
+      }
+    },
+    "theory_selector": {
+      "P001_FLOURISHER": [
+        "SD_001",
+        "GM_001"
+      ],
+      "P002_MEANING": [
+        "AC_001",
+        "SD_001",
+        "GM_001"
+      ],
+      "P003_LONELY": [
+        "AT_001",
+        "PT_001",
+        "PS_001"
+      ],
+      "P004_DEPLETED": [
+        "AC_001",
+        "SD_001",
+        "HL_001"
+      ],
+      "P005_REBUILDER": [
+        "AC_001",
+        "CB_001"
+      ],
+      "P006_COASTING": [
+        "GM_001",
+        "SD_001",
+        "HL_001"
+      ],
+      "override_burnout": [
+        "AC_001"
+      ],
+      "override_ocd": [
+        "AC_001"
+      ],
+      "block_if_rebuilder": [
+        "HL_001",
+        "GM_001"
+      ]
+    },
+    "roadmap": {
+      "phase1": "KWI Assessment + Basic Report + Radar Chart (เดือน 1-3)",
+      "phase2": "AI Chatbot Conversation + Checklist Engine (เดือน 3-6)",
+      "phase3": "Temporal Tracking + Influence Learning (เดือน 6-12)",
+      "phase4": "Academic Validation + n=500 + Publication (ปีที่ 2)"
+    }
+  },
+  "toxic_workplace_dimensions": [],
+  "toxic_scoring_rules": [],
+  "toxic_rules_json": {
+    "version": "1.0",
+    "module": "Toxic Workplace Module — Platform D KRUTH MIND",
+    "description": "Router rules + chatbot prompts สำหรับ Toxic Workplace use case",
+    "last_updated": "April 2026",
+    "integration": {
+      "extends": "Theory_Selector_Rules.json",
+      "new_event_type": "toxic_interaction (user_events_d)",
+      "new_theories_added": [
+        "GreyRock",
+        "VisibilityBuilding",
+        "ExitPlanning"
+      ],
+      "kb_file": "Toxic_Workplace_KB.xlsx"
+    },
+    "assessment_flow": {
+      "trigger_keywords": [
+        "เฮงซวย",
+        "toxic",
+        "หัวหน้าแย่",
+        "เพื่อนร่วมงานแย่",
+        "โดนกลั่นแกล้ง",
+        "โยนความผิด",
+        "claim งาน",
+        "ถูกดุ",
+        "ทนไม่ไหว",
+        "อยากออก",
+        "บรรยากาศแย่",
+        "ประชุมไม่มีเหตุผล",
+        "micromanage",
+        "ไม่ยุติธรรม",
+        "ถูกกีดกัน"
+      ],
+      "questions_to_ask": [
+        "AQ1",
+        "AQ2",
+        "AQ3",
+        "AQ4",
+        "AQ5"
+      ],
+      "max_questions": 3,
+      "note": "ถามทีละข้อ ไม่ถามพร้อมกัน ให้รู้สึกเหมือนคุยกัน ไม่ใช่แบบสอบถาม"
+    },
+    "type_classification": {
+      "Type_A": {
+        "label": "Genuinely Toxic — ตั้งใจทำร้าย",
+        "criteria": "AQ1=ทุกวัน AND AQ2 in [C,B] AND AQ4 in [B,C,D]",
+        "primary_strategy": "Grey Rock + Document + Exit Plan",
+        "theories_to_use": [
+          "GR004",
+          "EX_CHECKLIST"
+        ],
+        "chatbot_tone": "ยืนยันว่าสิ่งที่รู้สึกนั้น valid | ไม่บอกให้ปรับตัวอย่างเดียว",
+        "escalation": "แนะนำ HR หรือออก ไม่ใช่แค่ cope"
+      },
+      "Type_B": {
+        "label": "Incompatible — สไตล์ขัดกัน",
+        "criteria": "AQ1 in [B,C] AND AQ2=A AND AQ3 in [B,C]",
+        "primary_strategy": "DEMM Analysis + Communication Strategy",
+        "theories_to_use": [
+          "TA_001",
+          "PT_001",
+          "EI_001"
+        ],
+        "chatbot_tone": "อธิบาย DEMM ของอีกฝ่าย | ให้ Boundary Scripts ที่เหมาะกับ Quad คู่",
+        "escalation": "ถ้า 30 วันไม่ดีขึ้น → recheck type"
+      },
+      "Type_C": {
+        "label": "Triggered — กำลัง stressed/burned out",
+        "criteria": "AQ1=B AND AQ3=B AND timing ตรงกับ deadline/pressure",
+        "primary_strategy": "Empathy + Wait + Gottman Repair",
+        "theories_to_use": [
+          "GT_001",
+          "EI_001",
+          "MI_001"
+        ],
+        "chatbot_tone": "อธิบายว่า stress ทำอะไรกับ TJ/FJ | ให้รอ window ที่เหมาะ",
+        "escalation": "ถ้า pattern ยังอยู่หลัง stress หมด → อาจเป็น Type A"
+      },
+      "Type_D": {
+        "label": "Mirror — Friction จากตัวเราเอง",
+        "criteria": "AQ3=A AND compat_score > 65 AND friction_score >= 3",
+        "primary_strategy": "Friction Analysis + Self-awareness",
+        "theories_to_use": [
+          "CB_001",
+          "AC_001",
+          "HL_001"
+        ],
+        "chatbot_tone": "อ่อนโยน ไม่ blame ผู้ใช้ แต่เปิดมุมมอง Friction",
+        "escalation": "ไม่ escalate — ทำงานกับตัวเองก่อน"
+      }
+    },
+    "router_rules": [
+      {
+        "rule_id": "TW_R001",
+        "label": "Credit Stealing",
+        "trigger": "claim งาน | ขโมยผลงาน | เอาเครดิต | present งานฉัน",
+        "pattern_id": "TP001",
+        "immediate_response": "ยืนยันว่าเป็นเรื่องที่ไม่โอเค + ถาม AQ1,AQ3",
+        "strategy_file": "Boundary_Scripts BS002",
+        "theory": "VisibilityBuilding",
+        "flag_watch": "ถ้า > 3 ครั้ง → suggest formal documentation"
+      },
+      {
+        "rule_id": "TW_R002",
+        "label": "Gaslighting Detection",
+        "trigger": "บอกว่าฉันจำผิด | ไม่เคยพูดแบบนั้น | คิดไปเอง | sensitive เกิน | เริ่มสงสัยตัวเอง",
+        "pattern_id": "TP002",
+        "immediate_response": "ยืนยัน: สิ่งที่รู้สึกนั้น valid + อธิบาย Gaslighting pattern",
+        "strategy_file": "Boundary_Scripts BS005 + Grounding GR003 + GR004",
+        "theory": "GreyRock",
+        "flag_watch": "AQ4=B คือ Gaslighting signal ชัดเจน → escalate ถ้า AQ1=ทุกวัน",
+        "priority": "HIGH — อย่าบอกให้ปรับตัว"
+      },
+      {
+        "rule_id": "TW_R003",
+        "label": "Scapegoating",
+        "trigger": "โยนความผิด | แพะรับบาป | โทษฉันทุกครั้ง | ตำหนิฉันต่อหน้าทีม",
+        "pattern_id": "TP003",
+        "immediate_response": "ถาม AQ3 ก่อน (เฉพาะฉันหรือทุกคน?) + สอน Factual Defense",
+        "strategy_file": "Boundary_Scripts BS003",
+        "theory": "EI_001 + CR_001",
+        "flag_watch": "ถ้า AQ3=A (เฉพาะฉัน) → อาจถูก target โดยเฉพาะ → priority escalate"
+      },
+      {
+        "rule_id": "TW_R004",
+        "label": "Micromanagement",
+        "trigger": "จุกจิก | ถามทุกชั่วโมง | ไม่ไว้ใจ | approve ทุกอย่าง | ทำงานตัวเองไม่ได้",
+        "pattern_id": "TP004",
+        "immediate_response": "อธิบาย DEMM ของ micromanager + สอน Feed the Need strategy",
+        "strategy_file": "Boundary_Scripts BS001",
+        "theory": "TA_001 + PS_001",
+        "flag_watch": "ถ้า 30 วัน Feed the Need ไม่ได้ผล → recheck เป็น Type A"
+      },
+      {
+        "rule_id": "TW_R005",
+        "label": "Public Humiliation",
+        "trigger": "ดุต่อหน้า | ประจาน | ดูถูกในประชุม | เปรียบกับคนอื่น | อาย",
+        "pattern_id": "TP006",
+        "immediate_response": "Validate feeling + สอน De-escalation ในที่ประชุม",
+        "strategy_file": "Boundary_Scripts BS003 + Grounding GR001",
+        "theory": "EI_001 + GT_001",
+        "flag_watch": "> 3 ครั้ง = Hostile Work Environment → แนะนำ HR"
+      },
+      {
+        "rule_id": "TW_R006",
+        "label": "Want to Exit",
+        "trigger": "อยากออก | ทนไม่ไหวแล้ว | ไม่รู้ว่าจะอยู่ดีไหม | คุ้มไหมที่จะอยู่",
+        "pattern_id": "EXIT",
+        "immediate_response": "ถาม AQ4 + AQ5 ก่อน + ไม่ push ให้อยู่หรือออก",
+        "strategy_file": "Exit_Checklist EX001-EX015 + Grounding GR005 GR006",
+        "theory": "AC_001 + SD_001",
+        "flag_watch": "ถ้า Rain 🟡+ → แนะนำผู้เชี่ยวชาญก่อน Exit decision",
+        "note": "ไม่ตัดสินว่าควรออกหรือไม่ — ให้ข้อมูลและ checklist แล้วให้เขาตัดสินใจเอง"
+      },
+      {
+        "rule_id": "TW_R007",
+        "label": "General Toxic Venting",
+        "trigger": "ระบาย ไม่รู้จะทำยังไง อยู่ไปวันๆ เครียดมาก",
+        "pattern_id": "GENERAL",
+        "immediate_response": "รับฟังก่อน 1-2 รอบ → ถาม AQ5 (ต้องการอะไรจากการคุย) → จากนั้น classify",
+        "strategy_file": "Grounding GR001 GR002 GR007",
+        "theory": "EI_001",
+        "flag_watch": "ถ้า AQ4=C,D → Rain signal → Grounding ก่อน Theory"
+      }
+    ],
+    "chatbot_prompts": {
+      "opening_toxic": "ฟังดูเหนื่อยมากนะคะ สิ่งที่เจออยู่มีชื่อเรียก และไม่ใช่ความอ่อนแอของคุณ\nขอถามเพื่อให้ช่วยได้ตรงขึ้นนะคะ — {AQ1}",
+      "after_type_identified_A": "จากที่เล่ามา สิ่งที่เจออยู่คือ {pattern_name} ซึ่งเป็น {type_label}\nสิ่งสำคัญที่สุดตอนนี้คือดูแลตัวเองก่อน ไม่ใช่แค่ปรับตัว\nขอแนะนำ 3 สิ่งที่ทำได้เลย...",
+      "after_type_identified_B": "จาก DEMM ของคุณและสิ่งที่เล่า น่าจะเป็นเรื่อง Incompatibility มากกว่า Toxic จริงๆ\nดีข่าวคือ มีวิธีจัดการที่ได้ผลสำหรับ Quad คู่นี้...",
+      "validation_message": "สิ่งที่คุณรู้สึกนั้น valid ทั้งนั้น — คนที่เจอสิ่งเดียวกันก็รู้สึกแบบนี้เช่นกัน",
+      "gaslighting_alert": "⚠️ สิ่งที่เล่าฟังดูเป็นรูปแบบของ Gaslighting — การทำให้คนสงสัยความจำและการรับรู้ตัวเอง\nสิ่งที่สำคัญที่สุดตอนนี้คือ: ความจำของคุณไม่ได้ผิด\nขอแนะนำ...",
+      "exit_non_judgmental": "การตัดสินใจอยู่หรือออกเป็นของคุณคนเดียวเลยค่ะ\nผมจะช่วยให้ข้อมูลที่ต้องใช้ตัดสินใจ ไม่ push ทางไหน\nลองดู checklist นี้ก่อนได้เลยค่ะ...",
+      "referral_message": "จากสิ่งที่เล่า ผมแนะนำให้คุยกับนักจิตวิทยาหรือผู้เชี่ยวชาญด้วยนะคะ\nสิ่งที่เจออยู่หนักเกินไปสำหรับการรับมือคนเดียว\nสายด่วนกรมสุขภาพจิต: 1323"
+    },
+    "forbidden_responses": [
+      "อย่าบอก 'ลองเข้าใจเขาดูนะ' ถ้าเป็น Type A",
+      "อย่าบอก 'อาจเป็นเพราะคุณด้วย' ก่อนตรวจ Type",
+      "อย่าบอก 'ทนไปก่อน' โดยไม่มีเวลา",
+      "อย่า normalize toxic behavior ว่าเป็นเรื่องปกติของการทำงาน",
+      "อย่า push ให้อยู่ต่อถ้า Exit Energy Score < 5 หรือ Rain 🟠+"
+    ],
+    "safety_escalation": {
+      "rain_orange_plus": "แนะนำผู้เชี่ยวชาญก่อนทำ checklist ใดๆ",
+      "gaslighting_heavy": "GR004 Evidence Journal ทันที + แนะนำ HR หรือ legal",
+      "physical_threat": "แนะนำติดต่อ HR ด่วน + สายด่วน 1323 + กฎหมายแรงงาน",
+      "has_crisis": "1323 ทันที ไม่มีข้อยกเว้น"
+    }
+  }
+}

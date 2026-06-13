@@ -4,7 +4,7 @@ import { generateDVJId, calcThaiElement, calcChineseElement } from '@/lib/scorin
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { band, day, month, year, fname, lname, idcard, gender, province, referrerId, referralSource } = body;
+  const { band, day, month, year, fname, lname, idcard, gender, province, referrerId, referralSource, organization, lineUserId } = body;
 
   if (!band || !day || !month || !year || !fname || !lname || !gender) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 });
@@ -72,6 +72,54 @@ export async function POST(req: NextRequest) {
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Link to Organization if provided
+  if (organization) {
+    try {
+      // 1. Search if organization exists
+      const { data: orgData } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('name', organization)
+        .maybeSingle();
+
+      let orgId = orgData?.id;
+
+      if (!orgId) {
+        // 2. Create organization if it doesn't exist
+        const orgCode = 'ORG_' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        const { data: newOrg, error: orgInsertError } = await supabase
+          .from('organizations')
+          .insert({ name: organization, org_code: orgCode })
+          .select('id')
+          .single();
+
+        if (orgInsertError) {
+          console.error('Error inserting organization:', orgInsertError);
+        } else {
+          orgId = newOrg?.id;
+        }
+      }
+
+      // 3. Link user to organization in org_members
+      if (orgId) {
+        const { error: memberError } = await supabase
+          .from('org_members')
+          .insert({
+            org_id: orgId,
+            user_id: dvjId,
+            line_user_id: lineUserId || null,
+            role: 'member'
+          });
+
+        if (memberError) {
+          console.error('Error linking user to organization:', memberError);
+        }
+      }
+    } catch (orgErr: any) {
+      console.error('Organization linkage failed:', orgErr.message);
+    }
+  }
 
   // Create quiz session
   const { data: session } = await supabase.from('quiz_sessions').insert({
