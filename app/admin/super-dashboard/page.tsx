@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface Organization {
   id: string;
@@ -12,14 +12,90 @@ interface Organization {
   admin_email?: string;
 }
 
+interface LevelBarProps {
+  label: string;
+  counts: Record<string, number>;
+  total: number;
+}
+
+// Custom Component for Clinical Indicators
+function LevelBar({ label, counts, total }: LevelBarProps) {
+  const green = counts['🟢'] || 0;
+  const yellow = counts['🟡'] || 0;
+  const orange = counts['🟠'] || 0;
+  const red = counts['🔴'] || 0;
+
+  const pctG = total > 0 ? Math.round((green / total) * 100) : 0;
+  const pctY = total > 0 ? Math.round((yellow / total) * 100) : 0;
+  const pctO = total > 0 ? Math.round((orange / total) * 100) : 0;
+  const pctR = total > 0 ? Math.round((red / total) * 100) : 0;
+
+  return (
+    <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 backdrop-blur-md shadow-lg">
+      <div className="flex justify-between items-center">
+        <span className="text-xs font-bold text-slate-200">{label}</span>
+        <span className="text-[10px] text-slate-400">ผู้ประเมิน {total} คน</span>
+      </div>
+      
+      {/* Stacked bar */}
+      <div className="h-3 w-full bg-slate-950 rounded-full overflow-hidden flex">
+        {pctG > 0 && <div className="bg-emerald-500 h-full" style={{ width: `${pctG}%` }} title={`ปกติ/เสี่ยงต่ำ: ${pctG}%`} />}
+        {pctY > 0 && <div className="bg-amber-400 h-full" style={{ width: `${pctY}%` }} title={`เฝ้าระวัง: ${pctY}%`} />}
+        {pctO > 0 && <div className="bg-orange-500 h-full" style={{ width: `${pctO}%` }} title={`เสี่ยงสูง: ${pctO}%`} />}
+        {pctR > 0 && <div className="bg-rose-600 h-full" style={{ width: `${pctR}%` }} title={`เสี่ยงวิกฤต: ${pctR}%`} />}
+      </div>
+
+      {/* Legend with counts & percentages */}
+      <div className="grid grid-cols-4 gap-1 text-[8.5px] font-bold text-slate-300">
+        <div className="flex flex-col items-center border-r border-slate-800/80">
+          <span className="text-emerald-400">🟢 ปกติ</span>
+          <span>{green} ({pctG}%)</span>
+        </div>
+        <div className="flex flex-col items-center border-r border-slate-800/80">
+          <span className="text-amber-400">🟡 ระวัง</span>
+          <span>{yellow} ({pctY}%)</span>
+        </div>
+        <div className="flex flex-col items-center border-r border-slate-800/80">
+          <span className="text-orange-400">🟠 เสี่ยงสูง</span>
+          <span>{orange} ({pctO}%)</span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className="text-rose-500">🔴 วิกฤต</span>
+          <span>{red} ({pctR}%)</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SuperDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('all');
   const [stats, setStats] = useState({ totalUsers: 0, totalOrgs: 0 });
   const [kwiData, setKwiData] = useState<any[]>([]);
   const [quadrantData, setQuadrantData] = useState<any[]>([]);
   
+  // States for Clinical Signals
+  const [clinicalStats, setClinicalStats] = useState<Record<string, Record<string, number>>>({
+    rain: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    bolt: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    fog: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    socialanxiety: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    ocd: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    burnout: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    adhd: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    delusion: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+  });
+
+  const [brightTypeData, setBrightTypeData] = useState<any[]>([]);
+  const [brightFlagData, setBrightFlagData] = useState<any[]>([]);
+  
+  // States for Energy & Numerology
+  const [energyData, setEnergyData] = useState<any[]>([]);
+  const [energyKeywordsData, setEnergyKeywordsData] = useState<any[]>([]);
+
   // Form States
   const [newOrgName, setNewOrgName] = useState('');
   const [newOrgCode, setNewOrgCode] = useState('');
@@ -36,8 +112,16 @@ export default function SuperDashboard() {
 
   const COLORS = ['#1A3A5C', '#2E75B6', '#F59E0B', '#10B981', '#8B5CF6'];
 
+  const flagLabels: Record<string, string> = {
+    '💎': 'Intense Creative (💎)',
+    '⚗️': 'Hyper-Achiever / Misunderstood (⚗️)',
+    '🌱': 'Hidden Creative (🌱)',
+    'Normal': 'ทั่วไป / ไม่มีธงพิเศษ',
+    '': 'ทั่วไป / ไม่มีธงพิเศษ'
+  };
+
   useEffect(() => {
-    // 1. Access Control
+    // Access Control
     const email = localStorage.getItem('kruth_admin_email');
     const role = localStorage.getItem('kruth_admin_role');
 
@@ -46,19 +130,26 @@ export default function SuperDashboard() {
       return;
     }
 
-    fetchGlobalData();
+    // Load organizations first, then fetch initial dashboard data
+    loadOrganizations().then(() => {
+      fetchDashboardData('all');
+    });
   }, []);
 
-  async function fetchGlobalData() {
-    setLoading(true);
+  // Fetch new data when selected organization changes
+  useEffect(() => {
+    if (orgs.length > 0 || selectedOrgId !== 'all') {
+      fetchDashboardData(selectedOrgId);
+    }
+  }, [selectedOrgId]);
+
+  async function loadOrganizations() {
     try {
-      // 1. Fetch all organizations
       const { data: dbOrgs } = await supabase
         .from('organizations')
         .select('*')
         .order('created_at', { ascending: false });
 
-      // 2. Fetch all admins to map emails
       const { data: dbAdmins } = await supabase
         .from('org_admins')
         .select('*');
@@ -75,21 +166,63 @@ export default function SuperDashboard() {
         admin_email: adminMap[o.id] || 'ยังไม่มีแอดมิน'
       }));
       setOrgs(mappedOrgs);
+      setStats(prev => ({ ...prev, totalOrgs: dbOrgs?.length || 0 }));
+    } catch (err) {
+      console.error("Error loading organizations:", err);
+    }
+  }
 
-      // 3. Fetch overall user count
-      const { count: usersCount } = await supabase
-        .from('results')
-        .select('*', { count: 'exact', head: true });
+  async function fetchDashboardData(orgId: string) {
+    setLoading(true);
+    try {
+      let userIds: string[] | null = null;
 
-      setStats({
-        totalUsers: usersCount || 0,
-        totalOrgs: dbOrgs?.length || 0
-      });
+      if (orgId !== 'all') {
+        const { data: members } = await supabase
+          .from('org_members')
+          .select('user_id')
+          .eq('org_id', orgId);
 
-      // 4. Fetch overall KWI responses to calculate global averages
-      const { data: kwiResponses } = await supabase
-        .from('kwi_responses')
-        .select('vitality, meaning, connection, mastery, resilience');
+        userIds = (members || []).map(m => m.user_id);
+
+        if (userIds.length === 0) {
+          setStats(prev => ({ ...prev, totalUsers: 0 }));
+          setKwiData([]);
+          setQuadrantData([]);
+          setClinicalStats({
+            rain: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+            bolt: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+            fog: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+            socialanxiety: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+            ocd: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+            burnout: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+            adhd: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+            delusion: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+          });
+          setBrightTypeData([]);
+          setBrightFlagData([]);
+          setEnergyData([]);
+          setEnergyKeywordsData([]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 1. Fetch results count & basic data
+      let resultsQuery = supabase.from('results').select('id, user_id, quadrant_primary, bright_flag, bright_type, energy_name, energy_keywords', { count: 'exact' });
+      if (userIds) {
+        resultsQuery = resultsQuery.in('user_id', userIds);
+      }
+      const { data: results, count: usersCount } = await resultsQuery;
+
+      setStats(prev => ({ ...prev, totalUsers: usersCount || 0 }));
+
+      // 2. Fetch KWI scores
+      let kwiQuery = supabase.from('kwi_responses').select('vitality, meaning, connection, mastery, resilience');
+      if (userIds) {
+        kwiQuery = kwiQuery.in('user_id', userIds);
+      }
+      const { data: kwiResponses } = await kwiQuery;
 
       if (kwiResponses && kwiResponses.length > 0) {
         const sum = kwiResponses.reduce((acc, curr) => ({
@@ -108,13 +241,11 @@ export default function SuperDashboard() {
           { name: 'การเติบโต', score: Math.round((sum.a / len) * 10) / 10 },
           { name: 'ยืดหยุ่นลุกเร็ว', score: Math.round((sum.r / len) * 10) / 10 },
         ]);
+      } else {
+        setKwiData([]);
       }
 
-      // 5. Fetch overall quadrant distribution
-      const { data: results } = await supabase
-        .from('results')
-        .select('quadrant_primary');
-
+      // 3. Quadrant distribution
       const quadCounts: Record<string, number> = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
       (results || []).forEach(r => {
         if (r.quadrant_primary && r.quadrant_primary in quadCounts) {
@@ -136,8 +267,105 @@ export default function SuperDashboard() {
         }))
       );
 
+      // 4. Fetch category_flags
+      let flagsQuery = supabase.from('category_flags').select('user_id, rain_level, bolt_level, fog_level, bright_flag, bright_type, socialanxiety_level, ocd_level, burnout_level, adhd_level, delusion_level');
+      if (userIds) {
+        flagsQuery = flagsQuery.in('user_id', userIds);
+      }
+      const { data: flags } = await flagsQuery;
+
+      const initCounts = () => ({ '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 });
+      const clinCounts: Record<string, Record<string, number>> = {
+        rain: initCounts(),
+        bolt: initCounts(),
+        fog: initCounts(),
+        socialanxiety: initCounts(),
+        ocd: initCounts(),
+        burnout: initCounts(),
+        adhd: initCounts(),
+        delusion: initCounts(),
+      };
+
+      const mapLevelToEmoji = (lvl: string | null): '🟢' | '🟡' | '🟠' | '🔴' => {
+        if (!lvl) return '🟢';
+        const clean = lvl.trim();
+        if (clean === '🔴') return '🔴';
+        if (clean === '🟠') return '🟠';
+        if (clean === '🟡') return '🟡';
+        if (clean === '🟢') return '🟢';
+        return '🟢';
+      };
+
+      const brightFlagCounts: Record<string, number> = { '💎': 0, '⚗️': 0, '🌱': 0, 'Normal': 0 };
+      const typeCounts: Record<string, number> = {};
+
+      (flags || []).forEach(f => {
+        clinCounts.rain[mapLevelToEmoji(f.rain_level)]++;
+        clinCounts.bolt[mapLevelToEmoji(f.bolt_level)]++;
+        clinCounts.fog[mapLevelToEmoji(f.fog_level)]++;
+        clinCounts.socialanxiety[mapLevelToEmoji(f.socialanxiety_level)]++;
+        clinCounts.ocd[mapLevelToEmoji(f.ocd_level)]++;
+        clinCounts.burnout[mapLevelToEmoji(f.burnout_level)]++;
+        clinCounts.adhd[mapLevelToEmoji(f.adhd_level)]++;
+        clinCounts.delusion[mapLevelToEmoji(f.delusion_level)]++;
+
+        const flagKey = f.bright_flag ? f.bright_flag.trim() : 'Normal';
+        if (flagKey in brightFlagCounts) {
+          brightFlagCounts[flagKey]++;
+        } else if (flagKey && flagKey !== '') {
+          brightFlagCounts[flagKey] = (brightFlagCounts[flagKey] || 0) + 1;
+        } else {
+          brightFlagCounts['Normal']++;
+        }
+
+        if (f.bright_type) {
+          const tName = f.bright_type.trim();
+          if (tName) typeCounts[tName] = (typeCounts[tName] || 0) + 1;
+        }
+      });
+
+      setClinicalStats(clinCounts);
+      setBrightFlagData(Object.entries(brightFlagCounts).map(([name, value]) => ({ name, value })));
+      setBrightTypeData(
+        Object.entries(typeCounts)
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value)
+      );
+
+      // 5. Energy Names & Keywords
+      const energyNameCounts: Record<string, number> = {};
+      const keywordCounts: Record<string, number> = {};
+
+      (results || []).forEach(r => {
+        if (r.energy_name) {
+          const name = r.energy_name.trim();
+          if (name) energyNameCounts[name] = (energyNameCounts[name] || 0) + 1;
+        }
+        if (r.energy_keywords) {
+          const keywords = r.energy_keywords.split(/[,，\s]+/);
+          keywords.forEach((kw: string) => {
+            const clean = kw.trim();
+            if (clean && clean.length > 1) {
+              keywordCounts[clean] = (keywordCounts[clean] || 0) + 1;
+            }
+          });
+        }
+      });
+
+      const sortedEnergy = Object.entries(energyNameCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+      setEnergyData(sortedEnergy);
+
+      const sortedKeywords = Object.entries(keywordCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 16);
+      setEnergyKeywordsData(sortedKeywords);
+
     } catch (err) {
-      console.error("Error fetching super admin dashboard data:", err);
+      console.error("Error fetching dashboard data:", err);
     } finally {
       setLoading(false);
     }
@@ -153,21 +381,19 @@ export default function SuperDashboard() {
     
     try {
       const codeUpper = newOrgCode.trim().toUpperCase();
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('organizations')
         .insert({
           name: newOrgName.trim(),
           org_code: codeUpper
-        })
-        .select()
-        .single();
+        });
 
       if (error) throw error;
 
       setMessage({ type: 'success', text: `สร้างหน่วยงาน "${newOrgName}" สำเร็จ!` });
       setNewOrgName('');
       setNewOrgCode('');
-      fetchGlobalData();
+      loadOrganizations();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'ไม่สามารถสร้างหน่วยงานได้ (รหัสซ้ำ?)' });
     } finally {
@@ -175,7 +401,7 @@ export default function SuperDashboard() {
     }
   }
 
-  // Action: Assign/Grant Admin email to organization
+  // Action: Assign Admin
   async function handleAssignAdmin(orgId: string) {
     const emailToAssign = assignEmail[orgId]?.trim().toLowerCase();
     if (!emailToAssign) return;
@@ -184,7 +410,6 @@ export default function SuperDashboard() {
     setMessage({ type: '', text: '' });
 
     try {
-      // Upsert into org_admins table
       const { error } = await supabase
         .from('org_admins')
         .upsert({
@@ -197,7 +422,7 @@ export default function SuperDashboard() {
 
       setMessage({ type: 'success', text: `มอบสิทธิ์แอดมินอีเมล "${emailToAssign}" สำเร็จ!` });
       setAssignEmail(prev => ({ ...prev, [orgId]: '' }));
-      fetchGlobalData();
+      loadOrganizations();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'เกิดข้อผิดพลาดในการบันทึกสิทธิ์' });
     } finally {
@@ -205,20 +430,17 @@ export default function SuperDashboard() {
     }
   }
 
-  // Action: Impersonate (View a specific tenant's dashboard)
   function handleImpersonate(orgId: string, orgName: string) {
     localStorage.setItem('kruth_admin_org_id', orgId);
     localStorage.setItem('kruth_admin_org_name', orgName);
     router.push('/admin/dashboard');
   }
 
-  // Action: Logout
   function handleLogout() {
     localStorage.clear();
     router.push('/admin');
   }
 
-  // Chatbot Actions
   const openChat = async () => {
     setShowChat(true);
     if (chatMessages.length === 0) {
@@ -228,8 +450,8 @@ export default function SuperDashboard() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            orgId: 'global',
-            message: 'สวัสดีค่ะ ช่วยสรุปภาพรวมสุขภาวะจิตใจเฉลี่ยของทุกองค์กร และให้คำแนะนำการส่งเสริมความสุขในระดับส่วนกลางหน่อยค่ะ',
+            orgId: selectedOrgId === 'all' ? 'global' : selectedOrgId,
+            message: 'สวัสดีค่ะ ช่วยสรุปภาพรวมสุขภาวะจิตใจเฉลี่ยขององค์กรที่เลือก และให้คำแนะนำหน่อยค่ะ',
             chatHistory: []
           })
         });
@@ -258,7 +480,7 @@ export default function SuperDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orgId: 'global',
+          orgId: selectedOrgId === 'all' ? 'global' : selectedOrgId,
           message: text,
           chatHistory: newMsgs
         })
@@ -275,7 +497,7 @@ export default function SuperDashboard() {
     }
   };
 
-  if (loading) {
+  if (loading && orgs.length === 0) {
     return (
       <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
         <span className="text-5xl animate-bounce mb-4">🦅</span>
@@ -287,7 +509,7 @@ export default function SuperDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-slate-100 font-sans pb-16 animate-fade-in">
       
-      {/* 👑 PREMIUM NAVBAR */}
+      {/* 👑 NAVBAR */}
       <nav className="bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-40 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🦅</span>
@@ -308,7 +530,7 @@ export default function SuperDashboard() {
 
       <div className="max-w-7xl mx-auto px-6 mt-8 space-y-8">
         
-        {/* 📢 Alerts */}
+        {/* Alerts */}
         {message.text && (
           <div className={`p-4 rounded-2xl text-xs md:text-sm font-bold border transition-all ${
             message.type === 'success' 
@@ -319,34 +541,61 @@ export default function SuperDashboard() {
           </div>
         )}
 
-        {/* 📊 OVERVIEW COUNTER CARDS */}
+        {/* 🏢 FILTER CONTROLLER */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/40 border border-white/5 backdrop-blur-md rounded-2xl p-6 shadow-xl">
+          <div>
+            <h2 className="text-base font-black text-white">🔎 คัดกรองข้อมูลวิเคราะห์ระบบ</h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">เลือกหน่วยงานย่อยเพื่อวิเคราะห์คะแนนและผลประเมินสุขภาวะเฉพาะสถาบัน</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">กรองตามหน่วยงาน:</span>
+            <select
+              value={selectedOrgId}
+              onChange={(e) => setSelectedOrgId(e.target.value)}
+              className="px-4 py-2.5 bg-slate-950/90 border border-slate-800 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-teal-500 min-w-[240px] shadow-lg cursor-pointer"
+            >
+              <option value="all">ทั้งหมด (ทุกหน่วยงาน)</option>
+              {orgs.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* 📊 COUNTER CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex items-center gap-5">
             <span className="text-4xl bg-teal-500/10 text-teal-400 p-4 rounded-xl">👥</span>
             <div>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">ผู้ทำแบบประเมินทั้งหมด</p>
-              <h2 className="text-3xl font-black mt-1 text-white">{stats.totalUsers.toLocaleString()} <span className="text-lg font-medium text-slate-400">คน</span></h2>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">ผู้ทำแบบประเมินรวม (ที่เลือก)</p>
+              <h2 className="text-3xl font-black mt-1 text-white">
+                {stats.totalUsers.toLocaleString()} <span className="text-lg font-medium text-slate-400">คน</span>
+              </h2>
             </div>
           </div>
           <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex items-center gap-5">
             <span className="text-4xl bg-blue-500/10 text-blue-400 p-4 rounded-xl">🏫</span>
             <div>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">หน่วยงาน/สถาบันการศึกษา</p>
-              <h2 className="text-3xl font-black mt-1 text-white">{stats.totalOrgs.toLocaleString()} <span className="text-lg font-medium text-slate-400">แห่ง</span></h2>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">หน่วยงาน/สถาบันในระบบ</p>
+              <h2 className="text-3xl font-black mt-1 text-white">
+                {stats.totalOrgs.toLocaleString()} <span className="text-lg font-medium text-slate-400">แห่ง</span>
+              </h2>
             </div>
           </div>
         </div>
 
-        {/* 🕸️ CHARTS PANEL */}
+        {/* 🕸️ KWI & QUADRANT CHARTS */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Global KWI Scores */}
-          <div className="lg:col-span-2 relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl">
-            <h3 className="font-bold text-sm text-slate-300 mb-6">📊 ค่าเฉลี่ยสุขภาวะระดับประเทศ (Overall KWI Score)</h3>
+          <div className="lg:col-span-2 relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <h3 className="font-bold text-sm text-slate-300 mb-6">📊 ค่าเฉลี่ยสุขภาวะ KWI (Overall KWI Score)</h3>
             <div className="w-full h-80">
               {kwiData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={kwiData}>
-                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <BarChart data={kwiData} margin={{ bottom: 20 }}>
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
                     <YAxis domain={[0, 5]} stroke="#94a3b8" fontSize={11} tickLine={false} />
                     <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
                     <Bar dataKey="score" radius={[8, 8, 0, 0]} fill="#2E75B6">
@@ -363,31 +612,213 @@ export default function SuperDashboard() {
           </div>
 
           {/* Quadrant Distribution */}
-          <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl">
-            <h3 className="font-bold text-sm text-slate-300 mb-6">🧩 สัดส่วนขั้วพฤติกรรมรวม (Quadrants)</h3>
-            <div className="w-full h-64 flex items-center justify-center">
-              {quadrantData.some(q => q.value > 0) ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={quadrantData.filter(d => d.value > 0)}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {quadrantData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
-                    <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '10px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
+          <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <h3 className="font-bold text-sm text-slate-300 mb-4">🧩 สัดส่วนขั้วพฤติกรรมหลัก (Quadrants)</h3>
+            <div className="flex flex-col sm:flex-row items-center justify-around h-64">
+              <div className="w-1/2 h-full flex items-center justify-center">
+                {quadrantData.some(q => q.value > 0) ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={quadrantData.filter(d => d.value > 0)}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {quadrantData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-xs text-slate-500">ไม่มีข้อมูล</div>
+                )}
+              </div>
+              <div className="w-full sm:w-1/2 flex flex-col gap-2 mt-4 sm:mt-0 text-[11px]">
+                {quadrantData.map((item, index) => {
+                  const total = quadrantData.reduce((a, b) => a + b.value, 0);
+                  const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                  return (
+                    <div key={index} className="flex items-center justify-between text-slate-300">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                        <span>{item.name}</span>
+                      </div>
+                      <span className="font-bold text-white">{item.value} คน ({pct}%)</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 🧠 CLINICAL SIGNALS SECTION */}
+        <div className="space-y-6">
+          <div>
+            <h3 className="font-bold text-base text-slate-200">🧠 รายงานความเสี่ยงสุขภาวะจิตใจ (Clinical & Mental Health Signals)</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              สรุปสัญญาณความเสี่ยงจิตวิทยาจาก category_flags แบ่งตามความรุนแรงระดับต่างๆ
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <LevelBar label="🌧️ ซึมเศร้า (Rain)" counts={clinicalStats.rain} total={stats.totalUsers} />
+            <LevelBar label="⚡ ก้าวร้าว (Aggressive/Bolt)" counts={clinicalStats.bolt} total={stats.totalUsers} />
+            <LevelBar label="🌫️ ถดถอย (Regression/Fog)" counts={clinicalStats.fog} total={stats.totalUsers} />
+            <LevelBar label="👥 วิตกกังวลสังคม (Social Anxiety)" counts={clinicalStats.socialanxiety} total={stats.totalUsers} />
+            <LevelBar label="⏳ ย้ำคิดย้ำทำ (OCD)" counts={clinicalStats.ocd} total={stats.totalUsers} />
+            <LevelBar label="🔥 หมดไฟทำงาน (Burnout)" counts={clinicalStats.burnout} total={stats.totalUsers} />
+            <LevelBar label="🎯 สมาธิสั้น (ADHD)" counts={clinicalStats.adhd} total={stats.totalUsers} />
+            <LevelBar label="🌀 ความหลงผิด (Delusion)" counts={clinicalStats.delusion} total={stats.totalUsers} />
+          </div>
+        </div>
+
+        {/* 💎 BRIGHT FLAGS & TYPES */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Bright Flag distribution */}
+          <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <h3 className="font-bold text-sm text-slate-300 mb-4">💎 สถิติธงสว่างไสวเด่น (Bright Flags)</h3>
+            <div className="flex flex-col sm:flex-row items-center justify-around h-64">
+              <div className="w-1/2 h-full flex items-center justify-center">
+                {brightFlagData.some(f => f.value > 0) ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={brightFlagData.filter(d => d.value > 0)}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {brightFlagData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-xs text-slate-500">ไม่มีข้อมูล</div>
+                )}
+              </div>
+              <div className="w-full sm:w-1/2 flex flex-col gap-2 mt-4 sm:mt-0 text-[11px]">
+                {brightFlagData.map((item, index) => {
+                  const total = brightFlagData.reduce((a, b) => a + b.value, 0);
+                  const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                  return (
+                    <div key={index} className="flex items-center justify-between text-slate-300">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                        <span>{flagLabels[item.name] || item.name}</span>
+                      </div>
+                      <span className="font-bold text-white">{item.value} คน ({pct}%)</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Bright Types list */}
+          <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <h3 className="font-bold text-sm text-slate-300 mb-2">🧬 ประเภทสภาวะสว่างไสวหลัก (Bright Types)</h3>
+              <p className="text-[11px] text-slate-400 mb-4">จำแนกประเภทความสร้างสรรค์เชิงบวกและความฉลาดทางจิตวิทยาส่วนบุคคล</p>
+            </div>
+            <div className="space-y-3">
+              {brightTypeData.length > 0 ? (
+                brightTypeData.map((item, index) => {
+                  const maxVal = brightTypeData[0]?.value || 1;
+                  const pctWidth = Math.round((item.value / maxVal) * 100);
+                  return (
+                    <div key={index} className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-bold text-slate-200">{item.name}</span>
+                        <span className="text-slate-400">{item.value} คน</span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-950 rounded-full overflow-hidden">
+                        <div className="bg-gradient-to-r from-teal-500 to-indigo-500 h-full rounded-full" style={{ width: `${pctWidth}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
               ) : (
-                <div className="text-xs text-slate-500">ไม่มีข้อมูลบุคลิกภาพ</div>
+                <div className="text-xs text-slate-500 text-center py-8">ไม่มีข้อมูลประเภทสภาวะสว่างไสว</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 🔮 NUMEROLOGY ENERGY & KEYWORDS */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Energy Names */}
+          <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <h3 className="font-bold text-sm text-slate-300 mb-2">✨ พลังงานชีวิตหลักเด่น (Top Life Energies)</h3>
+              <p className="text-[11px] text-slate-400 mb-4">สัดส่วนผู้ที่มีพลังเลขศาสตร์พลังงานชีวิตสูงสุด 5 อันดับแรก</p>
+            </div>
+            <div className="space-y-3">
+              {energyData.length > 0 ? (
+                energyData.map((item, index) => {
+                  const maxVal = energyData[0]?.count || 1;
+                  const pctWidth = Math.round((item.count / maxVal) * 100);
+                  return (
+                    <div key={index} className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-bold text-slate-200">{item.name}</span>
+                        <span className="text-slate-400">{item.count} คน</span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-950 rounded-full overflow-hidden">
+                        <div className="bg-gradient-to-r from-teal-500 to-blue-500 h-full rounded-full" style={{ width: `${pctWidth}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-xs text-slate-500 text-center py-8">ไม่มีข้อมูลพลังงานชีวิต</div>
+              )}
+            </div>
+          </div>
+
+          {/* Keywords Cloud */}
+          <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex flex-col justify-between">
+            <div>
+              <h3 className="font-bold text-sm text-slate-300 mb-2">🏷️ คำสำคัญสะท้อนบุคลิกภาพยอดนิยม (Top Self-Keywords)</h3>
+              <p className="text-[11px] text-slate-400 mb-4">คีย์เวิร์ดที่พบบ่อยในฐานข้อมูลพลังงานชีวิตของผู้ประเมิน</p>
+            </div>
+            <div className="flex flex-wrap gap-2.5 content-start justify-center py-4">
+              {energyKeywordsData.length > 0 ? (
+                energyKeywordsData.map((item, index) => {
+                  const maxCount = energyKeywordsData[0]?.count || 1;
+                  const ratio = item.count / maxCount;
+                  const fontSize = ratio > 0.8 ? 'text-sm' : ratio > 0.5 ? 'text-xs' : 'text-[11px]';
+                  const opacity = ratio > 0.8 ? 'opacity-100' : ratio > 0.5 ? 'opacity-85' : 'opacity-70';
+                  const bgColors = [
+                    'bg-teal-500/10 text-teal-300 border-teal-500/20',
+                    'bg-blue-500/10 text-blue-300 border-blue-500/20',
+                    'bg-indigo-500/10 text-indigo-300 border-indigo-500/20',
+                    'bg-purple-500/10 text-purple-300 border-purple-500/20'
+                  ];
+                  const colorClass = bgColors[index % bgColors.length];
+                  return (
+                    <span
+                      key={index}
+                      className={`px-3 py-1.5 rounded-xl border font-bold transition-transform hover:scale-105 ${fontSize} ${opacity} ${colorClass}`}
+                    >
+                      {item.name} <span className="text-[9px] font-normal opacity-60">({item.count})</span>
+                    </span>
+                  );
+                })
+              ) : (
+                <div className="text-xs text-slate-500 text-center py-8">ไม่มีข้อมูลคีย์เวิร์ด</div>
               )}
             </div>
           </div>
@@ -421,7 +852,7 @@ export default function SuperDashboard() {
               <button
                 type="submit"
                 disabled={actionLoading}
-                className="px-4 py-1.5 bg-gradient-to-r from-teal-500 to-blue-500 text-white font-bold rounded-xl text-xs hover:opacity-90 transition-all"
+                className="px-4 py-1.5 bg-gradient-to-r from-teal-500 to-blue-500 text-white font-bold rounded-xl text-xs hover:opacity-90 transition-all shadow-md"
               >
                 เพิ่มหน่วยงาน
               </button>
@@ -491,14 +922,14 @@ export default function SuperDashboard() {
       {/* 🧘‍♀️ GLOBAL EXECUTIVE AI COACH CHATBOT WIDGET */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
         {showChat && (
-          <div className="bg-[#0f172a]/95 border border-slate-800 shadow-2xl rounded-2xl w-[90vw] max-w-md h-[500px] flex flex-col mb-4 overflow-hidden text-left backdrop-blur-md">
+          <div className="bg-[#0f172a]/95 border border-slate-800 shadow-2xl rounded-2xl w-[90vw] max-w-md h-[500px] flex flex-col mb-4 overflow-hidden text-left backdrop-blur-md animate-fade-in">
             {/* Header */}
             <div className="bg-gradient-to-r from-teal-500 to-blue-600 text-white p-4 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <span className="text-xl">💼</span>
                 <div>
                   <h3 className="font-bold text-sm">Global AI Executive Coach</h3>
-                  <p className="text-[0.65rem] text-teal-100">ผู้แนะนำและวิเคราะห์แผนกลยุทธ์จิตวิทยาส่วนกลาง</p>
+                  <p className="text-[0.65rem] text-teal-100">ผู้แนะนำและวิเคราะห์แผนกลยุทธ์จิตวิทยาระดับสูง</p>
                 </div>
               </div>
               <button onClick={() => setShowChat(false)} className="text-white/80 hover:text-white text-xl">✕</button>
@@ -526,7 +957,7 @@ export default function SuperDashboard() {
               {chatLoading && (
                 <div className="flex justify-start">
                   <div className="bg-slate-900/80 text-slate-400 border border-slate-800 rounded-2xl p-3 text-xs flex items-center gap-2">
-                    <span className="animate-pulse">● ● ●</span> บอทกำลังประมวลสรุปทั้งประเทศ...
+                    <span className="animate-pulse">● ● ●</span> บอทกำลังประมวลสรุปข้อมูล...
                   </div>
                 </div>
               )}
@@ -560,7 +991,7 @@ export default function SuperDashboard() {
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
                 disabled={chatLoading}
-                placeholder="ปรึกษาวิเคราะห์สภาวะจิตพนักงานประเทศ..."
+                placeholder="ปรึกษาวิเคราะห์สภาวะจิตใจ..."
                 className="flex-1 px-3.5 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs md:text-sm focus:outline-none focus:border-teal-500 disabled:bg-slate-950/40 text-white placeholder-slate-600"
               />
               <button
