@@ -52,6 +52,83 @@ function ResultPageInner() {
   const [satiyaLoading, setSatiyaLoading] = useState(false);
   const [behavioralProfile, setBehavioralProfile] = useState<any>(null);
 
+  // OpenAI Text-to-Speech States
+  const [ttsLoadingId, setTtsLoadingId] = useState<number | null>(null);
+  const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
+  const [autoSpeak, setAutoSpeak] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState<'shimmer' | 'nova'>('shimmer');
+
+  const handleSpeak = async (text: string, index: number) => {
+    if (ttsPlayingId === index) {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      }
+      setTtsPlayingId(null);
+      return;
+    }
+
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      setCurrentAudio(null);
+      setTtsPlayingId(null);
+    }
+
+    setTtsLoadingId(index);
+
+    try {
+      const cleanText = text
+        .replace(/\*\*/g, '')
+        .replace(/\*/g, '')
+        .replace(/__/g, '')
+        .replace(/#/g, '')
+        .replace(/`/g, '')
+        .replace(/\[.*?\]/g, '')
+        .trim();
+
+      const res = await fetch('/api/satiya/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: cleanText,
+          voice: selectedVoice
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to generate speech');
+      }
+
+      const audioBlob = await res.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      setCurrentAudio(audio);
+      setTtsLoadingId(null);
+      setTtsPlayingId(index);
+
+      audio.onended = () => {
+        setTtsPlayingId(null);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = () => {
+        setTtsPlayingId(null);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      await audio.play();
+    } catch (err) {
+      console.error("TTS play failed:", err);
+      setTtsLoadingId(null);
+      setTtsPlayingId(null);
+    }
+  };
+
   const openSatiyaChat = async () => {
     setShowSatiyaChat(true);
     if (satiyaMessages.length === 0) {
@@ -74,6 +151,9 @@ function ResultPageInner() {
           ]);
           setSatiyaState(data.state);
           setSatiyaOptions(data.options);
+          if (autoSpeak) {
+            setTimeout(() => handleSpeak(data.replyText, 0), 100);
+          }
         } else {
           setSatiyaMessages([
             { role: 'assistant', content: 'สวัสดีค่ะ ยินดีต้อนรับสู่ Satiya AI Wellbeing Coach นะคะ วันนี้เหนื่อยไหมคะ มีเรื่องราวอะไรไม่สบายใจหรืออยากระบายให้ฉันฟัง ปรึกษาได้ตลอดเลยนะคะ' }
@@ -120,20 +200,29 @@ function ResultPageInner() {
       });
       const data = await res.json();
       if (data.ok) {
-        setSatiyaMessages(prev => [...prev, { role: 'assistant', content: data.replyText }]);
+        setSatiyaMessages(prev => {
+          const updated: { role: 'user' | 'assistant'; content: string }[] = [
+            ...prev,
+            { role: 'assistant' as const, content: String(data.replyText) }
+          ];
+          if (autoSpeak) {
+            setTimeout(() => handleSpeak(data.replyText, updated.length - 1), 100);
+          }
+          return updated;
+        });
         setSatiyaState(data.state);
         setSatiyaOptions(data.options);
       } else {
         setSatiyaMessages(prev => [
           ...prev,
-          { role: 'assistant', content: 'ขออภัยด้วยนะคะ โค้ชไม่สามารถเชื่อมต่อระบบวิเคราะห์ AI ในขณะนี้ แต่โค้ชพร้อมรับฟังและเคียงข้างคุณเสมอค่ะ ลองพิมพ์เล่าเรื่องราวให้ฉันฟังได้เรื่อย ๆ เลยนะคะ' }
+          { role: 'assistant' as const, content: 'ขออภัยด้วยนะคะ โค้ชไม่สามารถเชื่อมต่อระบบวิเคราะห์ AI ในขณะนี้ แต่โค้ชพร้อมรับฟังและเคียงข้างคุณเสมอค่ะ ลองพิมพ์เล่าเรื่องราวให้ฉันฟังได้เรื่อย ๆ เลยนะคะ' }
         ]);
       }
     } catch (err) {
       console.error("Failed to send Satiya message:", err);
       setSatiyaMessages(prev => [
         ...prev,
-        { role: 'assistant', content: 'ขออภัยด้วยนะคะ โค้ชไม่สามารถเชื่อมต่อระบบวิเคราะห์ AI ในขณะนี้ แต่โค้ชพร้อมรับฟังและเคียงข้างคุณเสมอค่ะ ลองพิมพ์เล่าเรื่องราวให้ฉันฟังได้เรื่อย ๆ เลยนะคะ' }
+        { role: 'assistant' as const, content: 'ขออภัยด้วยนะคะ โค้ชไม่สามารถเชื่อมต่อระบบวิเคราะห์ AI ในขณะนี้ แต่โค้ชพร้อมรับฟังและเคียงข้างคุณเสมอค่ะ ลองพิมพ์เล่าเรื่องราวให้ฉันฟังได้เรื่อย ๆ เลยนะคะ' }
       ]);
     } finally {
       setSatiyaLoading(false);
@@ -142,6 +231,12 @@ function ResultPageInner() {
 
   const closeSatiyaChat = async () => {
     setShowSatiyaChat(false);
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      setCurrentAudio(null);
+      setTtsPlayingId(null);
+    }
     try {
       const { data: profile } = await supabase
         .from('satiya_behavioral_profiles')
@@ -1165,7 +1260,39 @@ function ResultPageInner() {
                   <p className="text-[0.65rem] text-teal-100">ผู้แนะนำและดูแลสุขภาวะทางใจส่วนตัวของคุณ</p>
                 </div>
               </div>
-              <button onClick={closeSatiyaChat} className="text-white/80 hover:text-white text-xl">✕</button>
+              <div className="flex items-center gap-2">
+                {/* Voice Selector */}
+                <select
+                  value={selectedVoice}
+                  onChange={(e) => setSelectedVoice(e.target.value as any)}
+                  className="bg-white/15 text-white text-[10px] px-1 py-0.5 rounded border border-white/20 focus:outline-none cursor-pointer hover:bg-white/20 transition-colors"
+                  title="เลือกเสียง AI"
+                >
+                  <option value="shimmer" className="text-gray-800">Shimmer (อบอุ่น)</option>
+                  <option value="nova" className="text-gray-800">Nova (สดใส)</option>
+                </select>
+
+                {/* Auto Speak Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !autoSpeak;
+                    setAutoSpeak(nextVal);
+                    if (!nextVal && currentAudio) {
+                      currentAudio.pause();
+                      currentAudio.currentTime = 0;
+                      setCurrentAudio(null);
+                      setTtsPlayingId(null);
+                    }
+                  }}
+                  className={`p-1 rounded hover:bg-white/20 transition-colors text-xs ${autoSpeak ? 'text-teal-300' : 'text-white/60'}`}
+                  title={autoSpeak ? "ปิดการอ่านอัตโนมัติ" : "เปิดการอ่านอัตโนมัติ"}
+                >
+                  {autoSpeak ? '🔊' : '🔇'}
+                </button>
+
+                <button onClick={closeSatiyaChat} className="text-white/80 hover:text-white text-xl ml-1">✕</button>
+              </div>
             </div>
 
             {/* Chat Messages */}
@@ -1178,7 +1305,25 @@ function ResultPageInner() {
                       : 'bg-white text-gray-700 shadow-sm border border-gray-100 rounded-tl-none'
                   }`}>
                     {msg.role !== 'user' && (
-                      <span className="font-bold text-[0.65rem] text-[#1D8B75] block mb-1">โค้ช ซาติยะ</span>
+                      <div className="flex justify-between items-center mb-1 gap-4">
+                        <span className="font-bold text-[0.65rem] text-[#1D8B75]">โค้ช ซาติยะ</span>
+                        <button
+                          type="button"
+                          onClick={() => handleSpeak(msg.content, index)}
+                          className="text-[0.65rem] hover:text-[#1A3A5C] transition-colors p-0.5 text-[#1D8B75] font-semibold flex items-center gap-0.5"
+                          title="ฟังเสียงอ่านข้อความนี้"
+                        >
+                          {ttsPlayingId === index ? (
+                            <span className="text-red-500 flex items-center gap-0.5 font-bold">
+                              🛑 หยุดเล่น
+                            </span>
+                          ) : ttsLoadingId === index ? (
+                            <span className="text-gray-400 animate-spin inline-block">🌀</span>
+                          ) : (
+                            '🔊 ฟังเสียง'
+                          )}
+                        </button>
+                      </div>
                     )}
                     {msg.content.split('\n').map((line, idx) => (
                       <span key={idx} className="block mt-0.5">{line}</span>
