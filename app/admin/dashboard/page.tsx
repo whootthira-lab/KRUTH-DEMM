@@ -26,6 +26,21 @@ export default function AdminDashboard() {
   const [execOptions, setExecOptions] = useState<string[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
+  // 📋 States for Management Recommendation Feedback & Evaluation
+  const [membersList, setMembersList] = useState<any[]>([]);
+  const [feedbacks, setFeedbacks] = useState<any[]>([]);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackForm, setFeedbackForm] = useState({
+    targetType: 'team' as 'team' | 'individual',
+    targetName: 'ภาพรวมทีม',
+    targetUserId: '',
+    recommendation: '',
+    status: 'ลองแล้วได้ผลดี',
+    rating: 5,
+    comment: ''
+  });
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+
   // โทนสีของ KRUTH DEMM สำหรับกราฟ
   const COLORS = ['#1A3A5C', '#2E75B6', '#F59E0B', '#10B981', '#8B5CF6'];
 
@@ -109,6 +124,82 @@ export default function AdminDashboard() {
     } finally {
       setExecLoading(false);
     }
+  };
+
+  const fetchFeedbacks = async (orgId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('quick_assessments')
+        .select('*')
+        .eq('platform', 'executive_coach')
+        .eq('situation_type', orgId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching feedbacks:', error);
+      } else {
+        setFeedbacks(data || []);
+      }
+    } catch (err) {
+      console.error('fetchFeedbacks error:', err);
+    }
+  };
+
+  const handleSaveFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const orgId = localStorage.getItem('kruth_admin_org_id');
+    if (!orgId) return;
+
+    setIsSubmittingFeedback(true);
+    try {
+      const { error } = await supabase
+        .from('quick_assessments')
+        .insert({
+          platform: 'executive_coach',
+          situation_type: orgId,
+          target_role: feedbackForm.targetType,
+          target_desc: feedbackForm.targetName,
+          target_user_id: feedbackForm.targetType === 'individual' ? feedbackForm.targetUserId || null : null,
+          q1_answer: feedbackForm.recommendation,
+          q2_answer: feedbackForm.status,
+          q3_answer: feedbackForm.comment,
+          user_felt_compat: feedbackForm.rating
+        });
+
+      if (error) {
+        alert('เกิดข้อผิดพลาดในการบันทึก: ' + error.message);
+      } else {
+        setFeedbackForm({
+          targetType: 'team',
+          targetName: 'ภาพรวมทีม',
+          targetUserId: '',
+          recommendation: '',
+          status: 'ลองแล้วได้ผลดี',
+          rating: 5,
+          comment: ''
+        });
+        setShowFeedbackModal(false);
+        await fetchFeedbacks(orgId);
+      }
+    } catch (err: any) {
+      console.error('Error saving feedback:', err);
+      alert('เกิดข้อผิดพลาด: ' + err.message);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
+  const handlePrefillFeedback = (recText: string) => {
+    setFeedbackForm({
+      targetType: 'team',
+      targetName: 'ภาพรวมทีม',
+      targetUserId: '',
+      recommendation: recText,
+      status: 'ลองแล้วได้ผลดี',
+      rating: 5,
+      comment: ''
+    });
+    setShowFeedbackModal(true);
   };
 
   async function fetchDashboardData(passedOrgId?: string) {
@@ -226,6 +317,24 @@ export default function AdminDashboard() {
           setFastestQuestions([...qAverages].sort((a, b) => a.avgSec - b.avgSec).slice(0, 5));
         }
       }
+
+      // 8. Fetch individual member profiles for team building and coaching dropdown
+      const { data: memberProfiles } = await supabase
+        .from('results')
+        .select(`
+          user_id,
+          archetype_id,
+          quadrant_primary,
+          archetypes(name_th),
+          users:user_id(full_name)
+        `)
+        .in('user_id', userIds);
+
+      setMembersList(memberProfiles || []);
+
+      // 9. Fetch executive feedbacks
+      await fetchFeedbacks(orgId);
+
     } catch (err) {
       console.error('fetchDashboardData Error:', err);
     } finally {
@@ -420,6 +529,288 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* 📋 ระบบติดตามและประเมินผลคำแนะนำการบริหาร (Management Recommendation Feedbacks) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-5 border-b border-gray-100 bg-gray-50 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+            <div>
+              <h3 className="font-bold text-[#1A3A5C] text-lg">📋 ระบบบันทึกและติดตามประเมินผลการแนะนำในการบริหาร</h3>
+              <p className="text-xs text-gray-500">บันทึกผลการประเมินและการทดลองปรับใช้งานคำแนะนำในการบริหารองค์กร</p>
+            </div>
+            <button
+              onClick={() => {
+                setFeedbackForm({
+                  targetType: 'team',
+                  targetName: 'ภาพรวมทีม',
+                  targetUserId: '',
+                  recommendation: '',
+                  status: 'ลองแล้วได้ผลดี',
+                  rating: 5,
+                  comment: ''
+                });
+                setShowFeedbackModal(true);
+              }}
+              className="bg-[#1A3A5C] hover:bg-[#2E75B6] text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 self-start sm:self-auto"
+            >
+              <span>➕</span> บันทึกการประเมินคำแนะนำใหม่
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-gray-500 uppercase bg-white border-b">
+                <tr>
+                  <th className="px-6 py-4">ประเภท</th>
+                  <th className="px-6 py-4">กลุ่ม/เป้าหมาย</th>
+                  <th className="px-6 py-4">คำแนะนำการบริหาร</th>
+                  <th className="px-6 py-4">ผลลัพธ์ / คะแนนประเมิน</th>
+                  <th className="px-6 py-4">ความคิดเห็นเพิ่มเติม</th>
+                  <th className="px-6 py-4">บันทึกเมื่อ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {feedbacks.map((fb) => (
+                  <tr key={fb.id} className="bg-white border-b hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 font-bold">
+                      <span className={`px-2 py-1 rounded-md text-xs font-bold ${
+                        fb.target_role === 'individual'
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {fb.target_role === 'individual' ? 'รายบุคคล' : 'รายทีม'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 font-semibold text-gray-700">
+                      {fb.target_desc}
+                    </td>
+                    <td className="px-6 py-4 text-xs text-gray-600 max-w-xs truncate" title={fb.q1_answer}>
+                      {fb.q1_answer}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <span className={`px-2 py-0.5 rounded-full text-[0.7rem] font-bold inline-block text-center w-fit ${
+                          fb.q2_answer === 'ลองแล้วได้ผลดี'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : fb.q2_answer === 'กำลังดำเนินการ'
+                            ? 'bg-amber-100 text-amber-800'
+                            : fb.q2_answer === 'ไม่ได้ผล/ต้องการปรับปรุง'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {fb.q2_answer}
+                        </span>
+                        <div className="text-amber-500 text-xs">
+                          {'★'.repeat(fb.user_felt_compat || 0)}
+                          {'☆'.repeat(5 - (fb.user_felt_compat || 0))}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-xs text-gray-500 max-w-xs truncate" title={fb.q3_answer}>
+                      {fb.q3_answer || '-'}
+                    </td>
+                    <td className="px-6 py-4 text-xs text-gray-400">
+                      {new Date(fb.created_at).toLocaleString('th-TH')}
+                    </td>
+                  </tr>
+                ))}
+                {feedbacks.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
+                      ยังไม่มีประวัติการบันทึกประเมินผลคำแนะนำในหน่วยงานนี้ คุณสามารถกด "ประเมินคำแนะนำนี้" ในบับเบิ้ลโค้ชด้านล่าง หรือปุ่มด้านบนเพื่อเพิ่มข้อมูลค่ะ
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 📋 Modal: แบบฟอร์มประเมินคำแนะนำการบริหาร */}
+        {showFeedbackModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100 flex flex-col p-6 animate-fade-in text-left">
+              <div className="flex justify-between items-center border-b pb-4 mb-4">
+                <h3 className="text-lg font-bold text-[#1A3A5C] flex items-center gap-2">
+                  <span>📝</span> บันทึกและประเมินผลคำแนะนำการบริหาร
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowFeedbackModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveFeedback} className="space-y-4">
+                {/* Scope Selection */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">ขอบเขตคำแนะนำ (Scope)</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackForm(prev => ({ ...prev, targetType: 'team', targetName: 'ภาพรวมทีม', targetUserId: '' }))}
+                      className={`py-2 px-4 rounded-xl text-xs font-bold transition-all border ${
+                        feedbackForm.targetType === 'team'
+                          ? 'bg-blue-50 border-blue-500 text-blue-800'
+                          : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      👥 รายทีม (Team)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const firstMember = membersList[0];
+                        const firstMemberName = firstMember ? ((firstMember.users as any)?.full_name || `พนักงานรหัส ${firstMember.user_id.slice(0, 5)}`) : '';
+                        setFeedbackForm(prev => ({
+                          ...prev,
+                          targetType: 'individual',
+                          targetUserId: firstMember?.user_id || '',
+                          targetName: firstMemberName
+                        }));
+                      }}
+                      className={`py-2 px-4 rounded-xl text-xs font-bold transition-all border ${
+                        feedbackForm.targetType === 'individual'
+                          ? 'bg-purple-50 border-purple-500 text-purple-800'
+                          : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      👤 รายบุคคล (Individual)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Target Selector */}
+                {feedbackForm.targetType === 'team' ? (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">ระบุชื่อทีม / แผนก</label>
+                    <input
+                      type="text"
+                      value={feedbackForm.targetName}
+                      onChange={e => setFeedbackForm(prev => ({ ...prev, targetName: e.target.value }))}
+                      placeholder="เช่น ภาพรวมทีม, ฝ่ายขาย, ทีมพัฒนา"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-blue-500"
+                      required
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">เลือกพนักงานเป้าหมาย</label>
+                    <select
+                      value={feedbackForm.targetUserId}
+                      onChange={e => {
+                        const selectedUserId = e.target.value;
+                        const member = membersList.find(m => m.user_id === selectedUserId);
+                        const memberName = member ? ((member.users as any)?.full_name || `พนักงานรหัส ${member.user_id.slice(0, 5)}`) : '';
+                        setFeedbackForm(prev => ({
+                          ...prev,
+                          targetUserId: selectedUserId,
+                          targetName: memberName
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-purple-500"
+                      required
+                    >
+                      {membersList.length === 0 ? (
+                        <option value="">ไม่มีข้อมูลพนักงานประเมินในหน่วยงานนี้</option>
+                      ) : (
+                        membersList.map(m => {
+                          const name = (m.users as any)?.full_name || `พนักงานรหัส ${m.user_id.slice(0, 5)}`;
+                          return (
+                            <option key={m.user_id} value={m.user_id}>
+                              {name} ({m.quadrant_primary || 'ไม่ระบุกรุ๊ป'})
+                            </option>
+                          );
+                        })
+                      )}
+                    </select>
+                  </div>
+                )}
+
+                {/* Recommendation Detail */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">คำแนะนำการบริหารที่ได้รับ</label>
+                  <textarea
+                    value={feedbackForm.recommendation}
+                    onChange={e => setFeedbackForm(prev => ({ ...prev, recommendation: e.target.value }))}
+                    placeholder="รายละเอียดคำแนะนำ หรือสิ่งที่ AI Coach ได้แนะนำ"
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-blue-500 focus:ring-0 resize-y"
+                    required
+                  />
+                </div>
+
+                {/* Implementation Status */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">สถานะการทดลองปรับใช้งาน</label>
+                  <select
+                    value={feedbackForm.status}
+                    onChange={e => setFeedbackForm(prev => ({ ...prev, status: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="ลองแล้วได้ผลดี">🟢 ลองแล้วได้ผลดี (Tried & Effective)</option>
+                    <option value="กำลังดำเนินการ">🟡 กำลังดำเนินการ (In Progress)</option>
+                    <option value="ยังไม่ได้ลอง">⚪ ยังไม่ได้ลอง (Not Tried Yet)</option>
+                    <option value="ไม่ได้ผล/ต้องการปรับปรุง">🔴 ไม่ได้ผล/ต้องการปรับปรุง (Ineffective)</option>
+                  </select>
+                </div>
+
+                {/* Rating selection (Stars) */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">คะแนนผลลัพธ์ / ความพึงพอใจการบริหาร (Rating)</label>
+                  <div className="flex gap-2 justify-start items-center">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setFeedbackForm(prev => ({ ...prev, rating: star }))}
+                        className={`text-2xl transition-all ${
+                          star <= feedbackForm.rating
+                            ? 'text-amber-400 scale-110'
+                            : 'text-gray-200 hover:text-amber-200'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                    <span className="text-xs font-bold text-gray-400 ml-2">({feedbackForm.rating} / 5 คะแนน)</span>
+                  </div>
+                </div>
+
+                {/* Comment details */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">ความคิดเห็น / ผลลัพธ์จากการนำไปใช้เพิ่มเติม (Outcome comment)</label>
+                  <textarea
+                    value={feedbackForm.comment}
+                    onChange={e => setFeedbackForm(prev => ({ ...prev, comment: e.target.value }))}
+                    placeholder="ระบุสิ่งที่สมาชิกสะท้อนกลับ หรืออุปสรรคข้อจำกัดที่พบ"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-blue-500 focus:ring-0 resize-y"
+                  />
+                </div>
+
+                {/* Submit / Cancel Actions */}
+                <div className="flex justify-end gap-2 border-t pt-4 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowFeedbackModal(false)}
+                    className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingFeedback || !feedbackForm.recommendation.trim()}
+                    className="px-5 py-2 bg-[#1A3A5C] hover:bg-[#2E75B6] disabled:bg-gray-200 text-white rounded-xl text-xs font-bold transition-colors shadow-md"
+                  >
+                    {isSubmittingFeedback ? 'กำลังบันทึก...' : 'บันทึกคำประเมิน'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* 🧘‍♀️ EXECUTIVE AI COACH FLOATING CHAT WIDGET */}
@@ -449,7 +840,16 @@ export default function AdminDashboard() {
                       : 'bg-white text-gray-700 shadow-sm border border-gray-100 rounded-tl-none'
                   }`}>
                     {msg.role !== 'user' && (
-                      <span className="font-bold text-[0.65rem] text-[#1D8B75] block mb-1">Executive AI Coach</span>
+                      <div className="flex justify-between items-center mb-1 gap-2 border-b border-gray-150 pb-1">
+                        <span className="font-bold text-[0.65rem] text-[#1D8B75]">Executive AI Coach</span>
+                        <button
+                          type="button"
+                          onClick={() => handlePrefillFeedback(msg.content)}
+                          className="text-[0.55rem] bg-teal-50 hover:bg-teal-100 text-[#1D8B75] px-1.5 py-0.5 rounded border border-teal-200/50 flex items-center gap-1 transition-colors font-semibold"
+                        >
+                          📝 ประเมินคำแนะนำนี้
+                        </button>
+                      </div>
                     )}
                     {msg.content.split('\n').map((line, idx) => (
                       <span key={idx} className="block mt-0.5">{line}</span>
