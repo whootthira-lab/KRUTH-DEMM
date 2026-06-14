@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
     let avgResilience = 3.0;
     let topArchetype = 'ยังไม่มีข้อมูล';
     let quadDistribution: Record<string, number> = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
+    let membersListText = 'ไม่มีข้อมูลพนักงานรายบุคคลในระบบย่อยนี้';
 
     if (userIds.length > 0) {
       // 3. Fetch KWI results for these users
@@ -103,6 +104,27 @@ export async function POST(req: NextRequest) {
           topArchetype = `${sorted[0][0]} (${sorted[0][1]} คน)`;
         }
       }
+
+      // Query individual member profiles for team building and coaching context
+      const { data: memberProfiles } = await supabase
+        .from('results')
+        .select(`
+          user_id,
+          archetype_id,
+          quadrant_primary,
+          archetypes(name_th),
+          users:user_id(full_name)
+        `)
+        .in('user_id', userIds);
+
+      if (memberProfiles && memberProfiles.length > 0) {
+        membersListText = memberProfiles.map((p, idx) => {
+          const name = (p.users as any)?.full_name || `พนักงานรหัส ${p.user_id.slice(0, 5)}`;
+          const archetype = (Array.isArray(p.archetypes) ? (p.archetypes[0] as any)?.name_th : (p.archetypes as any)?.name_th) || p.archetype_id || 'ไม่ระบุ';
+          const quadrant = p.quadrant_primary || 'ไม่ระบุ';
+          return `${idx + 1}. คุณ${name} - สไตล์: ${archetype} (${quadrant})`;
+        }).join('\n');
+      }
     }
 
     // 5. Construct System Prompt
@@ -123,6 +145,9 @@ export async function POST(req: NextRequest) {
   * Q3 (ผู้ประสาน): ${quadDistribution.Q3} คน
   * Q4 (ผู้สร้างสรรค์): ${quadDistribution.Q4} คน
 
+รายชื่อพนักงานในองค์กรและสไตล์การทำงาน (ใช้สำหรับช่วยบริหารงานและออกแบบการฟอร์มทีมงานเท่านั้น ห้ามเปิดเผยคะแนนสุขภาพจิต/ความลับ):
+${membersListText}
+
 กฎการสนทนาสำหรับ Executive Coach:
 1. ห้ามเจาะลึกวิเคราะห์หรือแสดงคะแนนของพนักงาน "รายคน" เด็ดขาด เพื่อเคารพความเป็นส่วนตัวของผู้ใช้ (PDPA & Psychological Ethics)
 2. เสนอไอเดียจัดกิจกรรมทีมสัมพันธ์ (Team Building) หรือ นโยบายส่งเสริมองค์กร (HR Policy) ที่สอดคล้องกับมิติที่พนักงานมีคะแนนเฉลี่ยต่ำที่สุด
@@ -130,7 +155,9 @@ export async function POST(req: NextRequest) {
    - หาก Connection ต่ำ -> แนะนำกิจกรรมกระชับสัมพันธ์และการเปิดใจร่วมกันในองค์กร
 3. ให้คำแนะนำโดยใช้หลักการจิตวิทยาการบริหารงานบุคคลอย่างนุ่มนวล มีความเป็นมืออาชีพ น่าเชื่อถือ และให้กำลังใจผู้บริหาร
 4. ห้ามใช้คำวินิจฉัยโรคเชิงคลินิก
-5. สนทนาด้วยภาษาไทยที่สุภาพ เข้าใจง่าย และให้แนวทางปฏิบัติที่ผู้บริหารสามารถนำไปปรับใช้ได้จริงทันที`;
+5. สนทนาด้วยภาษาไทยที่สุภาพ เข้าใจง่าย และให้แนวทางปฏิบัติที่ผู้บริหารสามารถนำไปปรับใช้ได้จริงทันที
+6. หากผู้บริหารถามหาคำแนะนำในการจัดทีมย่อย (Team Building / Task Force) หรือการทำงานร่วมกับพนักงานรายบุคคล ให้ดึงข้อมูลสไตล์พฤติกรรมการทำงานจากรายชื่อด้านบนมาแมปคู่กันและวิเคราะห์เชิงส่งเสริม (Synergy) แนะนำบทบาทที่เหมาะสม จุดปะทะที่ต้องระวัง และแนวทางการสื่อสารปรับตัวเข้าหา
+7. ในระหว่างการสนทนาเกี่ยวกับการบริหาร ให้คุณคอยตั้งคำถามหรือเช็กฟีดแบ็กเพื่อประเมินผลการแนะนำ (Feedback evaluation) เป็นระยะอย่างอ่อนโยน เช่น สอบถามผู้บริหารว่าได้ทดลองพูดคุยตามสคริปต์แล้วคนในทีมมีปฏิกิริยาอย่างไร เพื่อนำข้อมูลนั้นมาพัฒนาคำแนะนำถัดไปร่วมกันทั้งในระดับทีมและรายบุคคล`;
 
     // 6. Request to Generative AI via LLM Router (Anthropic -> OpenAI -> Gemini)
     let replyText = '';
