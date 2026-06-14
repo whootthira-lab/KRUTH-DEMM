@@ -4,7 +4,7 @@ import kbRaw from './satiya_kb.json';
 const kb = kbRaw as any;
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: process.env.ANTHROPIC_API_KEY || 'mock_key',
 });
 
 // Types
@@ -36,6 +36,151 @@ export interface UserProfile {
 }
 
 /**
+ * Helper to build a clean history where roles strictly alternate between 'user' and 'assistant'
+ * and double-pushed user messages at the end are normalized.
+ */
+export function buildCleanMessages(chatHistory: ChatMessage[], userMessage: string): ChatMessage[] {
+  const cleanHistory: ChatMessage[] = [];
+  let lastRole: 'user' | 'assistant' | null = null;
+
+  for (const msg of chatHistory) {
+    if (!msg.content || !msg.content.trim()) continue;
+    const role = msg.role === 'user' ? 'user' : 'assistant';
+
+    // If consecutive messages have the same role, override with the latest one
+    if (role === lastRole) {
+      if (cleanHistory.length > 0) {
+        cleanHistory[cleanHistory.length - 1] = { role, content: msg.content };
+      }
+    } else {
+      cleanHistory.push({ role, content: msg.content });
+      lastRole = role;
+    }
+  }
+
+  // Append userMessage if cleanHistory does not already end with a 'user' message
+  if (cleanHistory.length === 0 || cleanHistory[cleanHistory.length - 1].role !== 'user') {
+    if (userMessage && userMessage.trim()) {
+      cleanHistory.push({ role: 'user', content: userMessage });
+    }
+  } else if (userMessage && userMessage.trim()) {
+    // If the last message is already 'user', update its content to the latest userMessage
+    cleanHistory[cleanHistory.length - 1].content = userMessage;
+  }
+
+  return cleanHistory;
+}
+
+/**
+ * Robust LLM Router / Failover Chain
+ * Tries: Anthropic (Claude 3.5 Sonnet) -> OpenAI (GPT-4o-mini) -> Gemini (Gemini 1.5 Flash)
+ */
+export async function callGenerativeAI(
+  systemPrompt: string,
+  chatHistory: ChatMessage[],
+  userMessage: string
+): Promise<string> {
+  const cleanMessages = buildCleanMessages(chatHistory, userMessage);
+
+  // 1. Try Anthropic if key exists and is not empty
+  if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'mock_key') {
+    try {
+      console.log("LLM Router: Trying Anthropic Claude...");
+      const response = await anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20240620',
+        max_tokens: 1200,
+        system: systemPrompt,
+        messages: cleanMessages.map(m => ({ role: m.role, content: m.content }))
+      });
+      const text = response.content
+        .filter(b => b.type === 'text')
+        .map(b => (b as any).text)
+        .join('');
+      if (text) return text;
+    } catch (err) {
+      console.error("LLM Router: Anthropic Claude failed:", err);
+    }
+  }
+
+  // 2. Try OpenAI if key exists
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      console.log("LLM Router: Trying OpenAI GPT...");
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...cleanMessages.map(m => ({ role: m.role, content: m.content }))
+      ];
+
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          max_tokens: 1200
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (text) return text;
+      } else {
+        const errText = await res.text();
+        console.error("LLM Router: OpenAI returned non-OK response:", errText);
+      }
+    } catch (err) {
+      console.error("LLM Router: OpenAI failed:", err);
+    }
+  }
+
+  // 3. Try Gemini if key exists
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      console.log("LLM Router: Trying Gemini...");
+      const geminiContents = cleanMessages.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.content }]
+      }));
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: geminiContents,
+          systemInstruction: {
+            parts: [{ text: systemPrompt }]
+          },
+          generationConfig: {
+            maxOutputTokens: 1200
+          }
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return text;
+      } else {
+        const errText = await res.text();
+        console.error("LLM Router: Gemini returned non-OK response:", errText);
+      }
+    } catch (err) {
+      console.error("LLM Router: Gemini failed:", err);
+    }
+  }
+
+  // 4. Fallback if all providers fail
+  throw new Error("All LLM Router providers failed or are unconfigured");
+}
+
+/**
  * Helper: Detect if a user message contains toxic workplace triggers
  */
 function detectToxicKeywords(message: string): boolean {
@@ -60,29 +205,14 @@ export function getAqQuestion(index: number) {
  * Helper: Classify Toxic Type based on answers
  */
 function classifyToxicType(answers: Record<string, string>, profile: UserProfile | null) {
-  // AQ1 choices: A=แทบทุกวัน, B=สัปดาห์ละ 1-2 ครั้ง, C=เดือนละ 2-3 ครั้ง, D=นานๆ ครั้ง
-  // AQ2 choices: A=หัวหน้างานโดยตรง, B=เพื่อนร่วมงานในทีมเดียวกัน, C=ผู้บริหารระดับสูง, D=ลูกค้า
-  // AQ3 choices: A=พุ่งเป้ามาที่ฉันคนเดียวโดยเฉพาะ, B=เกิดขึ้นกับเพื่อนร่วมงานหลายๆ คนเช่นกัน, C=เกิดขึ้นกับทุกคนที่ขัดแย้งกับเขา, D=ไม่แน่ใจ
-  // AQ4 choices: A=สมาธิสั้นลง นอนไม่หลับ รู้สึกหวาดระแวงตลอดเวลา, B=อยากย้ายงานหรือลาออกในทันที, C=ส่งผลเสียบางส่วน, D=ไม่มีผลกระทบ
-  // AQ5 choices: A=หาวิธีรับมือเอาตัวรอดรายวัน, B=วางแผนเปลี่ยนงานหรือลาออกอย่างปลอดภัย, C=ฝึกการปกป้องอาณาเขตทางอารมณ์, D=อยากระบายอารมณ์
-
   const aq1 = answers['AQ1'] || '';
   const aq2 = answers['AQ2'] || '';
   const aq3 = answers['AQ3'] || '';
   const aq4 = answers['AQ4'] || '';
-  const aq5 = answers['AQ5'] || '';
 
-  // Type A: Genuinely Toxic — ตั้งใจทำร้าย (AQ1=ทุกวัน (A) AND AQ2 in [C,B] AND AQ4 in [B,C,D])
-  // criteria: "AQ1=ทุกวัน AND AQ2 in [C,B] AND AQ4 in [B,C,D]"
   const isTypeA = (aq1 === 'A' && (aq2 === 'B' || aq2 === 'C') && (aq4 === 'B' || aq4 === 'C' || aq4 === 'D'));
-
-  // Type B: Incompatible — สไตล์ขัดกัน (AQ1 in [B,C] AND AQ2=A AND AQ3 in [B,C])
   const isTypeB = ((aq1 === 'B' || aq1 === 'C') && aq2 === 'A' && (aq3 === 'B' || aq3 === 'C'));
-
-  // Type C: Triggered — กำลัง stressed/burned out (AQ1=B AND AQ3=B)
   const isTypeC = (aq1 === 'B' && aq3 === 'B');
-
-  // Type D: Mirror — Friction จากตัวเราเอง (AQ3=A)
   const isTypeD = (aq3 === 'A');
 
   if (isTypeA) return kb.toxic_rules_json.type_classification?.Type_A || null;
@@ -90,7 +220,6 @@ function classifyToxicType(answers: Record<string, string>, profile: UserProfile
   if (isTypeC) return kb.toxic_rules_json.type_classification?.Type_C || null;
   if (isTypeD) return kb.toxic_rules_json.type_classification?.Type_D || null;
 
-  // Fallback default
   return kb.toxic_rules_json.type_classification?.Type_A || null;
 }
 
@@ -135,7 +264,6 @@ export async function processSatiyaMessage(
     console.error("Error loading user profile:", err);
   }
 
-  // Fallback empty profile if database not queried
   if (!profile) {
     profile = {
       id: userId,
@@ -169,11 +297,9 @@ export async function processSatiyaMessage(
     const currentQuestion = getAqQuestion(aqIndex);
 
     if (aqIndex > 0) {
-      // Record answer for the PREVIOUS question
       const prevQuestion = getAqQuestion(aqIndex - 1);
       if (prevQuestion) {
-        // Simple mapping: check if message matches choice text or letter
-        let selectedKey = 'D'; // default fallback
+        let selectedKey = 'D';
         const msg = userMessage.toLowerCase();
         if (msg.includes('a') || (prevQuestion.ChoiceA && msg.includes(prevQuestion.ChoiceA.toLowerCase()))) selectedKey = 'A';
         else if (msg.includes('b') || (prevQuestion.ChoiceB && msg.includes(prevQuestion.ChoiceB.toLowerCase()))) selectedKey = 'B';
@@ -184,21 +310,18 @@ export async function processSatiyaMessage(
       }
     }
 
-    // Check if we need to ask the next question
     if (updatedState.currentAqIndex < 5) {
       const nextQuestion = getAqQuestion(updatedState.currentAqIndex);
       updatedState.currentAqIndex++;
 
       let questionText = '';
       if (aqIndex === 0) {
-        // For first question, wrap with introductory text
         questionText = kb.toxic_rules_json.chatbot_prompts?.opening_toxic || "ฟังดูเหนื่อยมากนะคะ ขอถามเพื่อช่วยได้ตรงขึ้นนะคะ — {AQ1}";
         questionText = questionText.replace('{AQ1}', nextQuestion.Question_TH);
       } else {
         questionText = nextQuestion.Question_TH;
       }
 
-      // Prepare button choices
       const choices = [
         nextQuestion.ChoiceA,
         nextQuestion.ChoiceB,
@@ -212,12 +335,10 @@ export async function processSatiyaMessage(
         options: choices
       };
     } else {
-      // Diagnostic complete! Transition out of toxic questions and classify
       updatedState.isToxicMode = false;
       const classification = classifyToxicType(updatedState.aqAnswers, profile);
       const isTypeA = classification?.label?.includes('Toxic');
 
-      // Save classification result as insight in supabase (optional / silent)
       try {
         await supabase.from('validation_insights').insert({
           insight_type: 'toxic_workplace_classification',
@@ -227,7 +348,6 @@ export async function processSatiyaMessage(
         });
       } catch (e) { /* silent */ }
 
-      // Get recommended theory text
       const recommendedTheories = (classification?.theories_to_use || [])
         .map((tid: string) => {
           const t = kb.theories.find((th: any) => th.Theory_ID === tid);
@@ -259,22 +379,13 @@ ${recommendedTheories}
 
       let replyText = '';
       try {
-        const response = await anthropic.messages.create({
-          model: 'claude-3-5-sonnet-20240620',
-          max_tokens: 1200,
-          system: systemPrompt,
-          messages: [
-            ...chatHistory,
-            { role: 'user', content: `ฉันกรอกข้อมูลการประเมินเสร็จแล้ว ช่วยวิเคราะห์ผลลัพธ์และให้คำแนะนำแบบเจาะลึกหน่อยค่ะ` }
-          ]
-        });
-
-        replyText = response.content
-          .filter(b => b.type === 'text')
-          .map(b => (b as any).text)
-          .join('');
+        replyText = await callGenerativeAI(
+          systemPrompt,
+          chatHistory,
+          `ฉันกรอกข้อมูลการประเมินเสร็จแล้ว ช่วยวิเคราะห์ผลลัพธ์และให้คำแนะนำแบบเจาะลึกหน่อยค่ะ`
+        );
       } catch (apiErr: any) {
-        console.error("Anthropic API Error (Toxicity), using rule-based fallback:", apiErr);
+        console.error("LLM Router failed (Toxicity), using rule-based fallback:", apiErr);
         replyText = `สวัสดีค่ะคุณ ${profile.name} (ขณะนี้ระบบวิเคราะห์ AI ขัดข้องชั่วคราว แต่ฉันขอเสนอแนวทางด้วยระบบวิเคราะห์เบื้องหลังของฉันนะคะ) 
 
 จากการวิเคราะห์ Workplace Toxicity ที่คุณเจออยู่ สภาวะแวดล้อมของคุณจัดอยู่ในกลุ่ม **"${classification?.label || 'สภาพแวดล้อมที่เป็นพิษ'}"** 
@@ -295,14 +406,12 @@ ${recommendedTheories}
   }
 
   // 4. STANDARD WELLBEING COACH MODE (NON-TOXIC)
-  // Retrieve wellbeing state and matching advice
   const patternId = profile.wellbeing_pattern || 'P006_COASTING';
   const matchedPattern = kb.wellbeing_patterns.find((p: any) => p.Pattern_ID === patternId || p.Archetype === profile?.archetype_id);
   const patternName = matchedPattern?.Wellbeing_State || 'Healthy Coasting (ดีตามเกณฑ์)';
   const patternAdvice = matchedPattern?.Advice || 'ดูแลสุขภาพใจเป็นประจำ';
   const patternActivity = matchedPattern?.Recommended_Activity || 'ฝึกสมาธิเบื้องต้น';
 
-  // Find lowest and highest dimensions
   const dims = [
     { name: 'พลังชีวิต (Vitality)', score: profile.vitality },
     { name: 'ความหมาย (Meaning)', score: profile.meaning },
@@ -314,7 +423,6 @@ ${recommendedTheories}
   const lowestDim = dims[0];
   const highestDim = dims[dims.length - 1];
 
-  // Look up recommended theories based on KWI scoring rules
   const theorySelector = kb.kwi_scoring_rules.theory_selector || {};
   const recommendedTheoryIds = theorySelector[patternId] || ["GM_001", "SD_001"];
   const matchedTheories = recommendedTheoryIds
@@ -325,7 +433,6 @@ ${recommendedTheories}
     .filter(Boolean)
     .join('\n');
 
-  // Format system prompt
   const systemPromptTemplate = kb.kwi_scoring_rules.chatbot_integration?.system_prompt_template || 
     `คุณคือ Satiya AI Wellbeing Coach
 ข้อมูลผู้ใช้:
@@ -350,7 +457,6 @@ ${recommendedTheories}
     .replace('{quadrant}', profile.quadrant)
     .replace('{via_dominant}', profile.via_dominant);
 
-  // Append matching theories & safety/tone guidelines
   systemPrompt += `\n\nข้อมูลทฤษฎีทางจิตวิทยาและคำแนะนำทางเลือกที่ระบบคัดสรรให้เหมาะสมกับระดับคะแนนมิติที่ต้องดูแล:\n${matchedTheories}`;
   systemPrompt += `\nแนะนำกิจกรรมพัฒนาสุขภาวะ: ${patternActivity}`;
   systemPrompt += `\n\nกฎการคุยของ Satiya AI Coach:
@@ -360,27 +466,16 @@ ${recommendedTheories}
 4. หาก Resilience < 2.5 หรือมีสัญญาณวิกฤต (Crisis) ให้ใส่เบอร์สายด่วนกรมสุขภาพจิต 1323 ไว้ท้ายข้อความอย่างอ่อนโยน
 5. ตอบกลับเป็นภาษาไทยที่สั้นกระชับ เข้าใจง่าย และจบประโยคด้วยคำถามชวนคิดเปิดใจ`;
 
-  // Call Anthropic Claude with graceful fallback
   let replyText = '';
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
-      max_tokens: 1000,
-      system: systemPrompt,
-      messages: chatHistory.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: userMessage })
-    });
-
-    replyText = response.content
-      .filter(b => b.type === 'text')
-      .map(b => (b as any).text)
-      .join('');
+    replyText = await callGenerativeAI(systemPrompt, chatHistory, userMessage);
   } catch (apiErr: any) {
-    console.error("Anthropic API Error (Wellbeing), using rule-based fallback:", apiErr);
+    console.error("LLM Router failed (Wellbeing), using rule-based fallback:", apiErr);
     replyText = `สวัสดีค่ะคุณ ${profile.name} โค้ชซาติยะยินดีต้อนรับค่ะ (ขณะนี้บริการ AI เชื่อมต่อขัดข้องชั่วคราว โค้ชขอแจ้งคำแนะนำที่คัดเลือกมาเฉพาะสำหรับสุขภาวะใจของคุณทดแทนนะคะ)
 
 📊 **จากการวิเคราะห์คะแนนสุขภาวะ KWI ของคุณ:**
 * 🌟 **มิติที่โดดเด่นโดนใจสูงสุดของคุณคือ ${highestDim.name}** (คะแนน ${highestDim.score}/5)
-* 🧘‍♀️ **มิติที่คุณควรหันมาดูแลเป็นพิเศษคือ ${lowestDim.name}** (คะแนน ${lowestDim.score}/5)
+* 🧘 **มิติที่คุณควรหันมาดูแลเป็นพิเศษคือ ${lowestDim.name}** (คะแนน ${lowestDim.score}/5)
 
 สภาวะสุขภาพใจของคุณในปัจจุบันสอดคล้องกับรูปแบบ **"${patternName}"** 
 💡 **คำแนะนำเพื่อการเติบโต:** {pattern_advice}

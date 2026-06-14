@@ -1161,8 +1161,8 @@ function ResultPageInner() {
               <div className="flex items-center gap-2">
                 <span className="text-xl">🧘‍♀️</span>
                 <div>
-                  <h3 className="font-bold text-sm">Satiya AI Coach</h3>
-                  <p className="text-[0.65rem] text-teal-100">ผู้แนะนำและดูแลสุขภาวะส่วนตัวของคุณ</p>
+                  <h3 className="font-bold text-sm">โค้ช ซาติยะ</h3>
+                  <p className="text-[0.65rem] text-teal-100">ผู้แนะนำและดูแลสุขภาวะทางใจส่วนตัวของคุณ</p>
                 </div>
               </div>
               <button onClick={closeSatiyaChat} className="text-white/80 hover:text-white text-xl">✕</button>
@@ -1178,7 +1178,7 @@ function ResultPageInner() {
                       : 'bg-white text-gray-700 shadow-sm border border-gray-100 rounded-tl-none'
                   }`}>
                     {msg.role !== 'user' && (
-                      <span className="font-bold text-[0.65rem] text-[#1D8B75] block mb-1">Satiya AI Coach</span>
+                      <span className="font-bold text-[0.65rem] text-[#1D8B75] block mb-1">โค้ช ซาติยะ</span>
                     )}
                     {msg.content.split('\n').map((line, idx) => (
                       <span key={idx} className="block mt-0.5">{line}</span>
@@ -1243,7 +1243,7 @@ function ResultPageInner() {
           onClick={openSatiyaChat}
           className="flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-[#1D8B75] to-[#1A3A5C] text-white shadow-xl hover:scale-105 transition-transform font-bold text-xs md:text-sm"
         >
-          <span className="text-base">🧘‍♀️</span> คุยกับ AI Wellbeing Coach
+          <span className="text-base">🧘‍♀️</span> คุยกับโค้ช ซาติยะ
         </button>
       </div>
     </div>

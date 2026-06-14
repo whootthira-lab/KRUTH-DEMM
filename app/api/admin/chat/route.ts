@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import Anthropic from '@anthropic-ai/sdk';
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+import { callGenerativeAI } from '@/lib/satiya_coach_engine';
 
 export async function POST(req: NextRequest) {
   try {
@@ -136,22 +132,12 @@ export async function POST(req: NextRequest) {
 4. ห้ามใช้คำวินิจฉัยโรคเชิงคลินิก
 5. สนทนาด้วยภาษาไทยที่สุภาพ เข้าใจง่าย และให้แนวทางปฏิบัติที่ผู้บริหารสามารถนำไปปรับใช้ได้จริงทันที`;
 
-    // 6. Request to Anthropic Claude with graceful fallback
+    // 6. Request to Generative AI via LLM Router (Anthropic -> OpenAI -> Gemini)
     let replyText = '';
     try {
-      const response = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20240620',
-        max_tokens: 1200,
-        system: systemPrompt,
-        messages: chatHistory.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: message }),
-      });
-
-      replyText = response.content
-        .filter(b => b.type === 'text')
-        .map(b => (b as any).text)
-        .join('');
+      replyText = await callGenerativeAI(systemPrompt, chatHistory, message);
     } catch (apiErr: any) {
-      console.error('Executive Chat Anthropic API Error, using fallback:', apiErr);
+      console.error('Executive Chat LLM Router Error, using fallback:', apiErr);
       
       // Determine lowest and highest dimensions from current stats
       const dims = [
@@ -169,7 +155,7 @@ export async function POST(req: NextRequest) {
 
 📊 **สรุปสุขภาวะบุคลากรเฉลี่ย (${totalMembers} คน):**
 * 🌟 **มิติที่เป็นจุดเด่นเด่นชัดที่สุดคือ:** ${highestDim.name} (เฉลี่ย ${highestDim.score}/5)
-* 🧘‍♀️ **มิติที่ควรได้รับการสนับสนุนดูแลเป็นพิเศษคือ:** ${lowestDim.name} (เฉลี่ย ${lowestDim.score}/5)
+* 🧘 **มิติที่ควรได้รับการสนับสนุนดูแลเป็นพิเศษคือ:** ${lowestDim.name} (เฉลี่ย ${lowestDim.score}/5)
 * 👥 **ประเภทบุคลิกภาพเด่นที่สุด (Top Archetype):** ${topArchetype}
 
 💡 **คำแนะนำแนวทางเชิงนโยบายเพื่อสุขภาวะที่ดีขึ้น:**
