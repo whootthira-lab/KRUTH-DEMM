@@ -18,6 +18,13 @@ interface Member {
   gender: string;
   archetype: string;
   quadrant: string;
+  kwi?: {
+    vitality: number;
+    meaning: number;
+    connection: number;
+    mastery: number;
+    resilience: number;
+  };
 }
 
 interface Session {
@@ -50,6 +57,7 @@ export default function AdminGroupsPage() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [analyzingGroupNo, setAnalyzingGroupNo] = useState<number | null>(null);
 
   // Load organizations and check access on mount
   useEffect(() => {
@@ -161,6 +169,33 @@ export default function AdminGroupsPage() {
             if (latestResults[m.user_id]) {
               m.archetype = latestResults[m.user_id].archetype_name_th;
               m.quadrant = latestResults[m.user_id].quadrant_primary;
+            }
+          });
+        }
+
+        // 2b. Fetch KWI responses for these members
+        const { data: kData, error: kErr } = await supabase
+          .from('kwi_responses')
+          .select('user_id, vitality, meaning, connection, mastery, resilience')
+          .in('user_id', userIds);
+
+        if (!kErr && kData) {
+          const latestKwi: Record<string, any> = {};
+          kData.forEach(k => {
+            if (!latestKwi[k.user_id]) {
+              latestKwi[k.user_id] = k;
+            }
+          });
+
+          parsedMembers.forEach(m => {
+            if (latestKwi[m.user_id]) {
+              m.kwi = {
+                vitality: latestKwi[m.user_id].vitality || 0,
+                meaning: latestKwi[m.user_id].meaning || 0,
+                connection: latestKwi[m.user_id].connection || 0,
+                mastery: latestKwi[m.user_id].mastery || 0,
+                resilience: latestKwi[m.user_id].resilience || 0,
+              };
             }
           });
         }
@@ -319,6 +354,160 @@ export default function AdminGroupsPage() {
     setMessage({ text, type });
     setTimeout(() => setMessage(null), 4000);
   }
+
+  const getGroupAnalysis = (groupNo: number) => {
+    const peers = groupedMembers[groupNo] || [];
+    if (peers.length === 0) return null;
+
+    let vSum = 0, mSum = 0, cSum = 0, maSum = 0, rSum = 0;
+    let countedKwi = 0;
+
+    peers.forEach(p => {
+      if (p.kwi) {
+        vSum += p.kwi.vitality;
+        mSum += p.kwi.meaning;
+        cSum += p.kwi.connection;
+        maSum += p.kwi.mastery;
+        rSum += p.kwi.resilience;
+        countedKwi++;
+      }
+    });
+
+    const hasKwi = countedKwi > 0;
+    const avg = {
+      vitality: hasKwi ? Math.round((vSum / countedKwi) * 10) / 10 : 3.0,
+      meaning: hasKwi ? Math.round((mSum / countedKwi) * 10) / 10 : 3.0,
+      connection: hasKwi ? Math.round((cSum / countedKwi) * 10) / 10 : 3.0,
+      mastery: hasKwi ? Math.round((maSum / countedKwi) * 10) / 10 : 3.0,
+      resilience: hasKwi ? Math.round((rSum / countedKwi) * 10) / 10 : 3.0,
+    };
+
+    const quads = peers.map(p => p.quadrant).filter(Boolean);
+    const qCount = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
+    quads.forEach(q => {
+      if (q in qCount) qCount[q as keyof typeof qCount]++;
+    });
+
+    let synergyType = 'กลุ่มประสานพลังทั่วไป (Neutral Synergy)';
+    let synergyDesc = 'กลุ่มมีความหลากหลายสมดุลดีในการสื่อสารและการทำงานร่วมกัน';
+    let strengths = ['มีความพร้อมและเปิดรับคำแนะนำแนวทางใหม่ๆ', 'สมาชิกมีความเข้าใจและปรับตัวเข้าหากันได้ดี'];
+    let cautions = ['ควรระมัดระวังเรื่องการกำหนดเป้าหมายและการแบ่งงานให้ชัดเจน'];
+    let delegationTips = 'แนะนำให้เน้นการทำงานร่วมกันแบบกระชับสัมพันธ์ โดยแบ่งหน้าที่ตามจุดแข็งของสไตล์บุคลิกภาพแต่ละคน';
+
+    const hasQ1 = qCount.Q1 > 0;
+    const hasQ2 = qCount.Q2 > 0;
+    const hasQ3 = qCount.Q3 > 0;
+    const hasQ4 = qCount.Q4 > 0;
+
+    if (hasQ1 && hasQ4 && !hasQ2 && !hasQ3) {
+      synergyType = '⚡ กลุ่มนวัตกรรมและจินตนาการขับเคลื่อน (Dynamic Innovators)';
+      synergyDesc = 'กลุ่มที่ประกอบด้วยนักสำรวจ (Q1) และผู้สร้างสรรค์ (Q4) เป็นหลัก มีพลังในการคิดค้นไอเดียริเริ่มสิ่งใหม่ๆ ได้อย่างรวดเร็วและกระตือรือร้นสูง';
+      strengths = [
+        'ริเริ่มความคิดสร้างสรรค์ได้ยอดเยี่ยม มีมุมมองนอกกรอบ',
+        'มีความคล่องตัวสูง ลุยงานเร็ว และปรับเปลี่ยนแนวทางได้รวดเร็ว'
+      ];
+      cautions = [
+        'อาจละเลยรายละเอียดขั้นตอนที่มีความละเอียดอ่อนสูง',
+        'หากไม่มีผู้ประสานงาน (Q3) หรือนักคิด (Q2) กลุ่มอาจขาดการกำหนดเป้าหมายเชิงระบบและมีโอกาสเบิร์นเอาท์ได้ง่าย'
+      ];
+      delegationTips = 'ควรระบุเป้าหมายกว้างๆ แล้วให้อิสระในการออกแบบแผนงาน หลีกเลี่ยงการควบคุมควบคุมมากเกินไป แต่ควรจัดตั้งเป้าหมายย่อยเพื่อติดตามความสำเร็จเป็นระยะ';
+    } else if (hasQ2 && hasQ3 && !hasQ1 && !hasQ4) {
+      synergyType = '🛡️ กลุ่มเสถียรภาพและวิเคราะห์ประคอง (Structured Supporters)';
+      synergyDesc = 'กลุ่มที่เน้นนักคิด (Q2) และผู้ประสาน (Q3) มีความระมัดระวัง รอบคอบ และใส่ใจบรรยากาศภายในทีมเป็นอันดับแรก';
+      strengths = [
+        'มีระบบระเบียบในกระบวนการทำงานสูง ทำงานที่มีความซับซ้อนได้ดี',
+        'มีความสามัคคีและดูแลรักษาน้ำใจกันอย่างอบอุ่น ลดความขัดแย้งเชิงลบ'
+      ];
+      cautions = [
+        'ตัดสินใจช้าเนื่องจากต้องการความมั่นใจในข้อมูลสูง',
+        'อาจจะกังวลกับการเปลี่ยนแปลงแนวทางใหม่ๆ และขาดแรงผลักดันเชิงรุก'
+      ];
+      delegationTips = 'ควรมอบหมายงานที่มีรูปแบบชัดเจน มีขั้นตอนแน่นอน หรือเป็นงานประเมินความเสี่ยง และช่วยสนับสนุนให้พวกเขากล้าแสดงความเห็นคิดเห็นแปลกใหม่โดยสร้างพื้นที่ปลอดภัย';
+    } else if (hasQ1 && hasQ2 && !hasQ3 && !hasQ4) {
+      synergyType = '🎯 กลุ่มวิสัยทัศน์และการวางแผนเชิงระบบ (Strategic Thinkers)';
+      synergyDesc = 'การบรรจบกันของนักสำรวจ (Q1) และนักคิด (Q2) โฟกัสไปที่เป้าหมายใหญ่และการวิเคราะห์ผลอย่างมีหลักการ';
+      strengths = [
+        'มีความสามารถในการคิดแผนกลยุทธ์ระยะยาว',
+        'วิเคราะห์ข้อดีข้อเสียอย่างเป็นระบบก่อนตัดสินใจลุย'
+      ];
+      cautions = [
+        'อาจจะทุ่มเทเวลาให้กับการถกเถียงเชิงทฤษฎีมากเกินไป',
+        'อาจขาดการดูแลความรู้สึกสมาชิกภายในกลุ่ม (Connection)'
+      ];
+      delegationTips = 'มอบหมายงานประเภทวิเคราะห์ข้อมูล แผนโครงการ หรือการประเมินวิสัยทัศน์เชิงกลยุทธ์ พร้อมตั้งเดดไลน์ที่ชัดเจนเพื่อตัดวงจรการคิดวิเคราะห์ซ้ำซ้อน';
+    } else if (hasQ3 && hasQ4 && !hasQ1 && !hasQ2) {
+      synergyType = '🌟 กลุ่มสร้างสรรค์สัมพันธ์และดูแลความรู้สึก (Expressive Collaborators)';
+      synergyDesc = 'การผสมผสานของผู้ประสาน (Q3) และผู้สร้างสรรค์ (Q4) มุ่งเน้นไปที่ประสบการณ์ของคน บรรยากาศ และศิลปะการทำงานร่วมกัน';
+      strengths = [
+        'สร้างบรรยากาศบวกและการมีส่วนร่วมได้ยอดเยี่ยม',
+        'แก้ไขปัญหาความเข้าใจผิดและการสื่อสารภายในกลุ่มได้อย่างนุ่มนวล'
+      ];
+      cautions = [
+        'อาจหลุดโฟกัสจากเป้าหมายผลลัพธ์ที่เป็นตัวเลขหรือประสิทธิภาพหลัก',
+        'มีความอ่อนไหวสูงเมื่อต้องมีการประเมินผลงานแบบตรงไปตรงมา'
+      ];
+      delegationTips = 'มอบหมายงานประเภทงานประชาสัมพันธ์ กิจกรรมสร้างการมีส่วนร่วม นำเสนอความเห็น หรืออกแบบสื่อสารสร้างความเข้าใจ โดยช่วยเป็นคนช่วยตบกรอบทิศทางให้อยู่ในเส้นทาง';
+    } else if (qCount.Q1 >= 2) {
+      synergyType = '🚀 กลุ่มหัวหอกรวดเร็วและผจญภัย (Fast Explorers)';
+      synergyDesc = 'มีนักสำรวจ (Q1) เกินกว่ากึ่งหนึ่งของกลุ่ม กลุ่มมีทิศทางกระตือรือร้นและต้องการผลลัพธ์อย่างรวดเร็ว';
+      strengths = [
+        'พร้อมทดลองแนวทางใหม่ๆ ทันทีโดยไม่ลังเล',
+        'แก้ปัญหาเฉพาะหน้าเก่งมาก'
+      ];
+      cautions = [
+        'ขาดความต่อเนื่องในงานที่ต้องทำซ้ำๆ หรือต้องการความละเอียด',
+        'อาจเกิดจุดชนของอีโก้ในการนำทางเดิน'
+      ];
+      delegationTips = 'มอบหมายงานที่มีความท้ายทายสูง แก้ปัญหาเร่งด่วน หรือบุกเบิกตลาด/ขั้นตอนใหม่ และให้คนคอยช่วยเก็บรายละเอียดปลีกย่อยตามหลัง';
+    } else if (qCount.Q2 >= 2) {
+      synergyType = '🔬 กลุ่มผู้เชี่ยวชาญวิเคราะห์เชิงลึก (Deep Analysts)';
+      synergyDesc = 'มีนักคิด (Q2) เป็นแกนหลัก เน้นความแม่นยำ ข้อมูลเชิงลึก และความถูกต้องของหลักการ';
+      strengths = [
+        'คุณภาพผลงานประเมินสูง มีความน่าเชื่อถือทางวิชาการ/หลักการ',
+        'มองเห็นจุดผิดพลาดเล็กๆ ที่คนอื่นละเลย'
+      ];
+      cautions = [
+        'อาจจะเกิดภาวะติดหล่มการวิเคราะห์ (Analysis Paralysis)',
+        'การสื่อสารกับบุคคลภายนอกอาจเข้าใจยากหรือมีศัพท์เฉพาะทางสูง'
+      ];
+      delegationTips = 'มอบหมายงานวิจัย พัฒนาระบบตรวจสอบ ตรวจทานสัญญา หรือประมวลผลสถิติ และแนะนำให้จัดโครงสร้างช่วงเวลาการแบ่งปันความคืบหน้าสม่ำเสมอ';
+    } else if (qCount.Q3 >= 2) {
+      synergyType = '🤝 กลุ่มผู้ประสานใจสามัคคี (Empathic Coordinators)';
+      synergyDesc = 'เน้นการดูแลสายสัมพันธ์ (Connection) ความปลอดภัยทางจิตวิทยา และความเป็นหนึ่งเดียวในกลุ่ม';
+      strengths = [
+        'ความขัดแย้งในกลุ่มต่ำมาก สมาชิกให้เกียรติและรับฟังกันอย่างดี',
+        'เป็นที่ยึดเหนี่ยวใจในการทำงานร่วมกันยามวิกฤต'
+      ];
+      cautions = [
+        'อาจเลี่ยงความขัดแย้งที่มีประโยชน์ต่อการทำงาน (Healthy Conflict)',
+        'เกรงใจกันเกินไปจนทำให้งานไม่คืบหน้าตามเป้าหมายหลัก'
+      ];
+      delegationTips = 'มอบหมายงานที่ต้องดูแลลูกค้าสัมพันธ์ ประสานงานความขัดแย้ง หรือประสานประโยชน์ระหว่างหน่วยงาน และควรมีผู้บริหารช่วยกำหนดเป้าหมายเชิงรุกและกระตุ้นการกระทำ';
+    } else if (qCount.Q4 >= 2) {
+      synergyType = '🎨 กลุ่มไอเดียระเบิดนอกกรอบ (Artistic Creators)';
+      synergyDesc = 'มีผู้สร้างสรรค์ (Q4) เป็นผู้นำกลุ่ม กลุ่มนี้เต็มไปด้วยความแปลกใหม่ จินตนาการ และวิธีการทำงานที่หลากหลาย';
+      strengths = [
+        'ผลผลิตงานออกแบบหรืองานสร้างสรรค์มีเอกลักษณ์โดดเด่น',
+        'มีมุมมองปฏิวัติวงการในการทำงานเดิมๆ'
+      ];
+      cautions = [
+        'การทำงานอาจไร้ทิศทางและควบคุมเวลาได้ยากลำบาก',
+        'อาจอึดอัดกับกฎเกณฑ์ขององค์กรอย่างเห็นได้ชัด'
+      ];
+      delegationTips = 'มอบงานสร้างสรรค์ แคมเปญโฆษณา การจัดนิทรรศการ หรือออกแบบผลิตภัณฑ์ และควรช่วยคุมเดดไลน์และสถิติด้านงบประมาณอย่างรัดกุม';
+    }
+
+    return {
+      avg,
+      hasKwi,
+      synergyType,
+      synergyDesc,
+      strengths,
+      cautions,
+      delegationTips,
+      peers
+    };
+  };
 
   // Helper to group assignments
   const groupedMembers: Record<number, Member[]> = {};
@@ -508,6 +697,13 @@ export default function AdminGroupsPage() {
                                 </div>
                               ))}
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => setAnalyzingGroupNo(groupNo)}
+                              className="w-full mt-2 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[0.7rem] font-bold transition-colors shadow-sm flex items-center justify-center gap-1.5"
+                            >
+                              <span>⚡</span> วิเคราะห์แนวโน้มและบริการกลุ่ม
+                            </button>
                           </div>
                         );
                       })}
@@ -579,6 +775,148 @@ export default function AdminGroupsPage() {
           </div>
 
         </div>
+
+        {/* 📊 Modal: ผลวิเคราะห์แนวโน้มและการบริหารกลุ่มย่อย */}
+        {analyzingGroupNo !== null && (() => {
+          const analysis = getGroupAnalysis(analyzingGroupNo);
+          if (!analysis) return null;
+
+          return (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100 flex flex-col p-6 animate-fade-in text-left">
+                <div className="flex justify-between items-center border-b pb-4 mb-4">
+                  <h3 className="text-lg font-bold text-[#1A3A5C] flex items-center gap-2">
+                    <span>📊</span> วิเคราะห์แนวโน้มและการบริหาร — กลุ่มย่อยที่ {analyzingGroupNo}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setAnalyzingGroupNo(null)}
+                    className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Synergy Type Profile */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4.5 rounded-2xl border border-blue-100/50 space-y-2">
+                    <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider block">สไตล์การประสานพลังทีม (Synergy Style)</span>
+                    <h4 className="text-base font-black text-[#1A3A5C]">{analysis.synergyType}</h4>
+                    <p className="text-xs text-gray-650 leading-relaxed">{analysis.synergyDesc}</p>
+                  </div>
+
+                  {/* KWI Wellness Dimension Averages */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">📊 สรุปค่าเฉลี่ยสุขภาวะกลุ่ม (Group Wellness Averages)</h4>
+                    {analysis.hasKwi ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          { label: '🌟 พลังชีวิต (Vitality)', val: analysis.avg.vitality, color: 'bg-emerald-500' },
+                          { label: '🧘 ความหมายชีวิต (Meaning)', val: analysis.avg.meaning, color: 'bg-indigo-500' },
+                          { label: '💙 สายสัมพันธ์ (Connection)', val: analysis.avg.connection, color: 'bg-blue-500' },
+                          { label: '🎯 การเติบโต (Mastery)', val: analysis.avg.mastery, color: 'bg-purple-500' },
+                          { label: '🛡️ ความยืดหยุ่น (Resilience)', val: analysis.avg.resilience, color: 'bg-pink-500' },
+                        ].map((dim, i) => (
+                          <div key={i} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex flex-col justify-between space-y-1">
+                            <div className="flex justify-between items-center text-xs font-bold">
+                              <span className="text-gray-600">{dim.label}</span>
+                              <span className="text-[#1A3A5C]">{dim.val} / 5.0</span>
+                            </div>
+                            <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`h-full ${dim.color}`} style={{ width: `${(dim.val / 5) * 100}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 text-yellow-850 border border-yellow-100 p-4 rounded-xl text-center text-xs font-semibold">
+                        ⚠️ สมาชิกในกลุ่มนี้ยังไม่ได้ทำแบบประเมินสุขภาวะจิตใจ KWI (ระบบจึงจำลองค่าเริ่มต้น 3.0/5.0 ไว้แทนก่อนชั่วคราวค่ะ)
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Strengths & Cautions */}
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100/50 space-y-2">
+                      <h5 className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                        <span>✅</span> จุดแข็งเด่นของกลุ่ม
+                      </h5>
+                      <ul className="list-disc list-inside text-xs text-gray-700 space-y-1 leading-relaxed pl-1">
+                        {analysis.strengths.map((str, i) => (
+                          <li key={i}>{str}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100/50 space-y-2">
+                      <h5 className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
+                        <span>⚠️</span> ข้อควรระวังในการร่วมงาน
+                      </h5>
+                      <ul className="list-disc list-inside text-xs text-gray-700 space-y-1 leading-relaxed pl-1">
+                        {analysis.cautions.map((cau, i) => (
+                          <li key={i}>{cau}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Manager Guidelines */}
+                  <div className="bg-teal-50/50 p-4.5 rounded-2xl border border-teal-100/50 space-y-2">
+                    <h5 className="text-xs font-bold text-teal-800 flex items-center gap-1.5">
+                      <span>💡</span> แนวทางการบริหารจัดงาน (Management Guidelines)
+                    </h5>
+                    <p className="text-xs text-gray-755 leading-relaxed">{analysis.delegationTips}</p>
+                  </div>
+
+                  {/* Group Members detail table */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">👥 รายชื่อและบุคลิกภาพพนักงานในกลุ่ม</h4>
+                    <div className="border border-gray-150 rounded-xl overflow-hidden text-xs">
+                      <table className="w-full text-left">
+                        <thead className="bg-gray-50 border-b">
+                          <tr>
+                            <th className="px-4 py-2">ชื่อพนักงาน</th>
+                            <th className="px-4 py-2">สไตล์พฤติกรรม (Archetype)</th>
+                            <th className="px-4 py-2">กลุ่ม (Quadrant)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y text-gray-700">
+                          {analysis.peers.map((peer, i) => (
+                            <tr key={i} className="hover:bg-gray-50/30">
+                              <td className="px-4 py-2 font-bold text-gray-800">{peer.full_name}</td>
+                              <td className="px-4 py-2 text-gray-600">{peer.archetype || 'ยังไม่ได้ทำแบบทดสอบ'}</td>
+                              <td className="px-4 py-2">
+                                <span className={`px-2 py-0.5 rounded-full font-bold text-[0.65rem] ${
+                                  peer.quadrant === 'Q1' ? 'bg-blue-100 text-blue-800' :
+                                  peer.quadrant === 'Q2' ? 'bg-amber-100 text-amber-800' :
+                                  peer.quadrant === 'Q3' ? 'bg-emerald-100 text-emerald-800' :
+                                  peer.quadrant === 'Q4' ? 'bg-purple-100 text-purple-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {peer.quadrant || 'ไม่ระบุ'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end border-t pt-4 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setAnalyzingGroupNo(null)}
+                    className="px-5 py-2 bg-[#1A3A5C] hover:bg-[#2E75B6] text-white rounded-xl text-xs font-bold transition-colors shadow-md"
+                  >
+                    ปิดหน้าต่าง
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       </div>
     </div>
