@@ -9,47 +9,50 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 });
     }
 
-    const selectedVoice = voice || 'premwadee'; // Defaults to Azure Premwadee
+    const selectedVoice = voice || 'google'; // Defaults to Google Cloud TTS
 
-    // 1. Check Azure Speech Service if requested
-    if (selectedVoice === 'premwadee') {
-      const azureKey = process.env.AZURE_SPEECH_KEY;
-      const azureRegion = process.env.AZURE_SPEECH_REGION || 'southeastasia';
+    // 1. Check Google Cloud Text-to-Speech (Neural2)
+    if (selectedVoice === 'google') {
+      const googleKey = process.env.GOOGLE_TTS_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
-      if (azureKey) {
-        console.log("TTS: Using Azure TTS Premwadee...");
-        const url = `https://${azureRegion}.tts.speech.microsoft.com/cognitiveservices/v1`;
-        const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="th-TH">
-  <voice name="th-TH-PremwadeeNeural">
-    ${text}
-  </voice>
-</speak>`;
-
+      if (googleKey && googleKey !== 'mock_key') {
+        console.log("TTS: Trying Google Cloud TTS...");
+        const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleKey}`;
+        
         const res = await fetch(url, {
           method: 'POST',
           headers: {
-            'Ocp-Apim-Subscription-Key': azureKey,
-            'Content-Type': 'application/ssml+xml',
-            'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
-            'User-Agent': 'KRUTH-DEMM'
+            'Content-Type': 'application/json'
           },
-          body: ssml
+          body: JSON.stringify({
+            input: { text },
+            voice: {
+              languageCode: 'th-TH',
+              name: 'th-TH-Neural2-F' // Emits natural female Thai voice (Neural2)
+            },
+            audioConfig: {
+              audioEncoding: 'MP3'
+            }
+          })
         });
 
         if (res.ok) {
-          const audioBuffer = await res.arrayBuffer();
-          return new Response(audioBuffer, {
-            headers: {
-              'Content-Type': 'audio/mpeg',
-              'Cache-Control': 'public, max-age=3600'
-            }
-          });
+          const data = await res.json();
+          if (data.audioContent) {
+            const audioBuffer = Buffer.from(data.audioContent, 'base64');
+            return new Response(audioBuffer, {
+              headers: {
+                'Content-Type': 'audio/mpeg',
+                'Cache-Control': 'public, max-age=3600'
+              }
+            });
+          }
         } else {
           const errText = await res.text();
-          console.error('Azure TTS API error, falling back:', errText);
+          console.error('Google TTS API error, falling back to OpenAI:', errText);
         }
       } else {
-        console.warn('Azure Speech Key is not configured. Falling back to OpenAI shimmer...');
+        console.warn('Google API key is not configured for TTS. Falling back to OpenAI shimmer...');
       }
     }
 
@@ -59,7 +62,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'OpenAI API Key is not configured' }, { status: 500 });
     }
 
-    const openAiVoice = (selectedVoice === 'premwadee') ? 'shimmer' : (selectedVoice === 'nova' ? 'nova' : 'shimmer');
+    const openAiVoice = (selectedVoice === 'google') ? 'shimmer' : (selectedVoice === 'nova' ? 'nova' : 'shimmer');
 
     console.log(`TTS: Using OpenAI TTS ${openAiVoice}...`);
     const response = await fetch('https://api.openai.com/v1/audio/speech', {

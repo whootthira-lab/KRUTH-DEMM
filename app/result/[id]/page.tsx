@@ -57,7 +57,7 @@ function ResultPageInner() {
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [autoSpeak, setAutoSpeak] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState<'premwadee' | 'shimmer' | 'nova'>('premwadee');
+  const [selectedVoice, setSelectedVoice] = useState<'google' | 'shimmer' | 'nova'>('google');
 
   const handleSpeak = async (text: string, index: number) => {
     if (ttsPlayingId === index) {
@@ -1268,7 +1268,7 @@ function ResultPageInner() {
                   className="bg-white/15 text-white text-[10px] px-1 py-0.5 rounded border border-white/20 focus:outline-none cursor-pointer hover:bg-white/20 transition-colors"
                   title="เลือกเสียง AI"
                 >
-                  <option value="premwadee" className="text-gray-800">Premwadee (ไทยแท้ - Azure)</option>
+                  <option value="google" className="text-gray-800">Google Neural2 (ไทยแท้)</option>
                   <option value="shimmer" className="text-gray-800">Shimmer (ฝรั่ง - OpenAI)</option>
                   <option value="nova" className="text-gray-800">Nova (ฝรั่ง - OpenAI)</option>
                 </select>
