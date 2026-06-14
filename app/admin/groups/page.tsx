@@ -176,8 +176,9 @@ export default function AdminGroupsPage() {
         // 2b. Fetch KWI responses for these members
         const { data: kData, error: kErr } = await supabase
           .from('kwi_responses')
-          .select('user_id, vitality, meaning, connection, mastery, resilience')
-          .in('user_id', userIds);
+          .select('user_id, vitality, meaning, connection, mastery, resilience, taken_at')
+          .in('user_id', userIds)
+          .order('taken_at', { ascending: false });
 
         if (!kErr && kData) {
           const latestKwi: Record<string, any> = {};
