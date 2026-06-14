@@ -136,18 +136,47 @@ export async function POST(req: NextRequest) {
 4. ห้ามใช้คำวินิจฉัยโรคเชิงคลินิก
 5. สนทนาด้วยภาษาไทยที่สุภาพ เข้าใจง่าย และให้แนวทางปฏิบัติที่ผู้บริหารสามารถนำไปปรับใช้ได้จริงทันที`;
 
-    // 6. Request to Anthropic Claude
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
-      max_tokens: 1200,
-      system: systemPrompt,
-      messages: chatHistory.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: message }),
-    });
+    // 6. Request to Anthropic Claude with graceful fallback
+    let replyText = '';
+    try {
+      const response = await anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20240620',
+        max_tokens: 1200,
+        system: systemPrompt,
+        messages: chatHistory.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: message }),
+      });
 
-    const replyText = response.content
-      .filter(b => b.type === 'text')
-      .map(b => (b as any).text)
-      .join('');
+      replyText = response.content
+        .filter(b => b.type === 'text')
+        .map(b => (b as any).text)
+        .join('');
+    } catch (apiErr: any) {
+      console.error('Executive Chat Anthropic API Error, using fallback:', apiErr);
+      
+      // Determine lowest and highest dimensions from current stats
+      const dims = [
+        { name: 'พลังชีวิต (Vitality)', score: avgVitality },
+        { name: 'ความหมายชีวิต (Meaning)', score: avgMeaning },
+        { name: 'สายสัมพันธ์ความสัมพันธ์ (Connection)', score: avgConnection },
+        { name: 'การเติบโตความเชี่ยวชาญ (Mastery)', score: avgMastery },
+        { name: 'ความยืดหยุ่นลุกเร็ว (Resilience)', score: avgResilience }
+      ];
+      dims.sort((a, b) => a.score - b.score);
+      const lowestDim = dims[0];
+      const highestDim = dims[dims.length - 1];
+
+      replyText = `สวัสดีค่ะผู้บริหารองค์กร "${orgName}" (ขณะนี้การเชื่อมต่อ AI ขัดข้องชั่วคราว โค้ชระดับบริหารขอเสนอรายงานวิเคราะห์ภาพรวมองค์กรด้วยฐานข้อมูลอัตโนมัติทดแทนก่อนนะคะ)
+
+📊 **สรุปสุขภาวะบุคลากรเฉลี่ย (${totalMembers} คน):**
+* 🌟 **มิติที่เป็นจุดเด่นเด่นชัดที่สุดคือ:** ${highestDim.name} (เฉลี่ย ${highestDim.score}/5)
+* 🧘‍♀️ **มิติที่ควรได้รับการสนับสนุนดูแลเป็นพิเศษคือ:** ${lowestDim.name} (เฉลี่ย ${lowestDim.score}/5)
+* 👥 **ประเภทบุคลิกภาพเด่นที่สุด (Top Archetype):** ${topArchetype}
+
+💡 **คำแนะนำแนวทางเชิงนโยบายเพื่อสุขภาวะที่ดีขึ้น:**
+1. **จัดกิจกรรมมุ่งเน้นพัฒนาด้านที่เฉลี่ยต่ำสุด (${lowestDim.name}):** หากเป็นมิติพลังชีวิต (Vitality) แนะนำให้ทบทวนชั่วโมงการทำงานและจัดสัมมนาผ่อนคลาย หากเป็นมิติความสัมพันธ์ (Connection) แนะนำกิจกรรมกลุ่มสัมพันธ์เพื่อเปิดรับฟังเสียงของพนักงานอย่างปลอดภัย
+2. **ดึงจุดแข็งสูงสุด (${highestDim.name}) มาสร้างความร่วมมือ:** นำกลุ่มพนักงานที่มีทักษะมิตินี้เข้ามาเป็นผู้นำเสนอความคิดสร้างสรรค์ในองค์กร
+3. **จัดกิจกรรม Team Building:** แนะนำให้สร้างกระบวนการแบ่งปันความเห็นเพื่อลดความเสี่ยงการเกิดภาวะหมดไฟในการทำงานสะสมค่ะ`;
+    }
 
     return NextResponse.json({
       ok: true,

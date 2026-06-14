@@ -74,9 +74,26 @@ function ResultPageInner() {
           ]);
           setSatiyaState(data.state);
           setSatiyaOptions(data.options);
+        } else {
+          setSatiyaMessages([
+            { role: 'assistant', content: 'สวัสดีค่ะ ยินดีต้อนรับสู่ Satiya AI Wellbeing Coach นะคะ วันนี้เหนื่อยไหมคะ มีเรื่องราวอะไรไม่สบายใจหรืออยากระบายให้ฉันฟัง ปรึกษาได้ตลอดเลยนะคะ' }
+          ]);
+          setSatiyaOptions([
+            'วิเคราะห์ผลสุขภาวะของฉัน',
+            'ขอวิธีจัดการความเครียดสัปดาห์นี้',
+            'อยากพูดคุยรับคำแนะนำทั่วไป'
+          ]);
         }
       } catch (err) {
         console.error("Failed to load initial satiya greeting:", err);
+        setSatiyaMessages([
+          { role: 'assistant', content: 'สวัสดีค่ะ ยินดีต้อนรับสู่ Satiya AI Wellbeing Coach นะคะ วันนี้เหนื่อยไหมคะ มีเรื่องราวอะไรไม่สบายใจหรืออยากระบายให้ฉันฟัง ปรึกษาได้ตลอดเลยนะคะ' }
+        ]);
+        setSatiyaOptions([
+          'วิเคราะห์ผลสุขภาวะของฉัน',
+          'ขอวิธีจัดการความเครียดสัปดาห์นี้',
+          'อยากพูดคุยรับคำแนะนำทั่วไป'
+        ]);
       } finally {
         setSatiyaLoading(false);
       }
@@ -106,9 +123,18 @@ function ResultPageInner() {
         setSatiyaMessages(prev => [...prev, { role: 'assistant', content: data.replyText }]);
         setSatiyaState(data.state);
         setSatiyaOptions(data.options);
+      } else {
+        setSatiyaMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: 'ขออภัยด้วยนะคะ โค้ชไม่สามารถเชื่อมต่อระบบวิเคราะห์ AI ในขณะนี้ แต่โค้ชพร้อมรับฟังและเคียงข้างคุณเสมอค่ะ ลองพิมพ์เล่าเรื่องราวให้ฉันฟังได้เรื่อย ๆ เลยนะคะ' }
+        ]);
       }
     } catch (err) {
       console.error("Failed to send Satiya message:", err);
+      setSatiyaMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: 'ขออภัยด้วยนะคะ โค้ชไม่สามารถเชื่อมต่อระบบวิเคราะห์ AI ในขณะนี้ แต่โค้ชพร้อมรับฟังและเคียงข้างคุณเสมอค่ะ ลองพิมพ์เล่าเรื่องราวให้ฉันฟังได้เรื่อย ๆ เลยนะคะ' }
+      ]);
     } finally {
       setSatiyaLoading(false);
     }

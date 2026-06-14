@@ -257,20 +257,34 @@ ${recommendedTheories}
 5. หากผู้ใช้มีความเสี่ยงสูง (Resilience < 2.5 หรือ AQ4 เป็น Choice A/B) ให้ใส่เบอร์สายด่วนสุขภาพจิต 1323 กรมสุขภาพจิตไว้ท้ายข้อความอย่างอ่อนโยน
 6. ตอบกลับเป็นภาษาไทยที่อบอุ่น อ่อนโยน เข้าอกเข้าใจ ไม่เป็นทางการจนเกินไป และน่าไว้วางใจ`;
 
-      const response = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20240620',
-        max_tokens: 1200,
-        system: systemPrompt,
-        messages: [
-          ...chatHistory,
-          { role: 'user', content: `ฉันกรอกข้อมูลการประเมินเสร็จแล้ว ช่วยวิเคราะห์ผลลัพธ์และให้คำแนะนำแบบเจาะลึกหน่อยค่ะ` }
-        ]
-      });
+      let replyText = '';
+      try {
+        const response = await anthropic.messages.create({
+          model: 'claude-3-5-sonnet-20240620',
+          max_tokens: 1200,
+          system: systemPrompt,
+          messages: [
+            ...chatHistory,
+            { role: 'user', content: `ฉันกรอกข้อมูลการประเมินเสร็จแล้ว ช่วยวิเคราะห์ผลลัพธ์และให้คำแนะนำแบบเจาะลึกหน่อยค่ะ` }
+          ]
+        });
 
-      const replyText = response.content
-        .filter(b => b.type === 'text')
-        .map(b => (b as any).text)
-        .join('');
+        replyText = response.content
+          .filter(b => b.type === 'text')
+          .map(b => (b as any).text)
+          .join('');
+      } catch (apiErr: any) {
+        console.error("Anthropic API Error (Toxicity), using rule-based fallback:", apiErr);
+        replyText = `สวัสดีค่ะคุณ ${profile.name} (ขณะนี้ระบบวิเคราะห์ AI ขัดข้องชั่วคราว แต่ฉันขอเสนอแนวทางด้วยระบบวิเคราะห์เบื้องหลังของฉันนะคะ) 
+
+จากการวิเคราะห์ Workplace Toxicity ที่คุณเจออยู่ สภาวะแวดล้อมของคุณจัดอยู่ในกลุ่ม **"${classification?.label || 'สภาพแวดล้อมที่เป็นพิษ'}"** 
+และมีข้อเสนอแนะหลักคือการปฏิบัติตามแนวทาง **"${classification?.primary_strategy || 'ตั้งแนวป้องกันตนเอง (Boundary)'}"**
+
+💡 **คำแนะนำเร่งด่วนสำหรับคุณ:**
+1. **ตั้งรับอย่างมั่นคง (Boundary):** หลีกเลี่ยงการตอบโต้ทางอารมณ์กับคนที่เป็นพิษ ให้เน้นสื่อสารเฉพาะเรื่องงานเป็นหลักแบบลายลักษณ์อักษร
+2. **วางแผนทางออก (Exit Plan):** เริ่มทบทวนทางเลือกอื่น ๆ มองหาโอกาสหรือแผนงานสำรองเพื่อปกป้องสภาพจิตใจของคุณในระยะยาว
+3. **ฟื้นฟูตนเอง:** หากสภาวะจิตใจอยู่ในเกณฑ์ตึงเครียดสูง แนะนำให้ปรึกษาสายด่วนกรมสุขภาพจิต 1323 นะคะ`;
+      }
 
       return {
         replyText,
@@ -346,18 +360,36 @@ ${recommendedTheories}
 4. หาก Resilience < 2.5 หรือมีสัญญาณวิกฤต (Crisis) ให้ใส่เบอร์สายด่วนกรมสุขภาพจิต 1323 ไว้ท้ายข้อความอย่างอ่อนโยน
 5. ตอบกลับเป็นภาษาไทยที่สั้นกระชับ เข้าใจง่าย และจบประโยคด้วยคำถามชวนคิดเปิดใจ`;
 
-  // Call Anthropic Claude
-  const response = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet-20240620',
-    max_tokens: 1000,
-    system: systemPrompt,
-    messages: chatHistory.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: userMessage })
-  });
+  // Call Anthropic Claude with graceful fallback
+  let replyText = '';
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20240620',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: chatHistory.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: userMessage })
+    });
 
-  const replyText = response.content
-    .filter(b => b.type === 'text')
-    .map(b => (b as any).text)
-    .join('');
+    replyText = response.content
+      .filter(b => b.type === 'text')
+      .map(b => (b as any).text)
+      .join('');
+  } catch (apiErr: any) {
+    console.error("Anthropic API Error (Wellbeing), using rule-based fallback:", apiErr);
+    replyText = `สวัสดีค่ะคุณ ${profile.name} โค้ชซาติยะยินดีต้อนรับค่ะ (ขณะนี้บริการ AI เชื่อมต่อขัดข้องชั่วคราว โค้ชขอแจ้งคำแนะนำที่คัดเลือกมาเฉพาะสำหรับสุขภาวะใจของคุณทดแทนนะคะ)
+
+📊 **จากการวิเคราะห์คะแนนสุขภาวะ KWI ของคุณ:**
+* 🌟 **มิติที่โดดเด่นโดนใจสูงสุดของคุณคือ ${highestDim.name}** (คะแนน ${highestDim.score}/5)
+* 🧘‍♀️ **มิติที่คุณควรหันมาดูแลเป็นพิเศษคือ ${lowestDim.name}** (คะแนน ${lowestDim.score}/5)
+
+สภาวะสุขภาพใจของคุณในปัจจุบันสอดคล้องกับรูปแบบ **"${patternName}"** 
+💡 **คำแนะนำเพื่อการเติบโต:** {pattern_advice}
+🎯 **กิจกรรมที่โค้ชแนะนำให้ลองทำวันนี้:** {pattern_activity}
+
+คุณอยากคุยเรื่องอะไรเพิ่มเติม หรือสนใจจะปรับปรุงดูแล ${lowestDim.name} ก่อนดีคะ? ปรึกษาได้ตลอดเลยนะคะ โค้ชพร้อมเคียงข้างรับฟังเสมอค่ะ`
+      .replace('{pattern_advice}', patternAdvice)
+      .replace('{pattern_activity}', patternActivity);
+  }
 
   return {
     replyText,
