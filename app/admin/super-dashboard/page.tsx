@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 
 interface Organization {
   id: string;
@@ -18,7 +18,7 @@ interface LevelBarProps {
   total: number;
 }
 
-// Custom Component for Clinical Indicators
+// Custom Component for Clinical Indicators (Detailed view)
 function LevelBar({ label, counts, total }: LevelBarProps) {
   const green = counts['🟢'] || 0;
   const yellow = counts['🟡'] || 0;
@@ -114,7 +114,7 @@ export default function SuperDashboard() {
 
   const flagLabels: Record<string, string> = {
     '💎': 'Intense Creative (💎)',
-    '⚗️': 'Hyper-Achiever / Misunderstood (⚗️)',
+    '⚗️': 'Hyper-Achiever (⚗️)',
     '🌱': 'Hidden Creative (🌱)',
     'Normal': 'ทั่วไป / ไม่มีธงพิเศษ',
     '': 'ทั่วไป / ไม่มีธงพิเศษ'
@@ -497,6 +497,24 @@ export default function SuperDashboard() {
     }
   };
 
+  // Stacked Bar Chart data formatting for clinical risks
+  const clinicalChartData = [
+    { name: 'ซึมเศร้า', '🟢 ปกติ': clinicalStats.rain['🟢'], '🟡 เฝ้าระวัง': clinicalStats.rain['🟡'], '🟠 เสี่ยงสูง': clinicalStats.rain['🟠'], '🔴 วิกฤต': clinicalStats.rain['🔴'] },
+    { name: 'ก้าวร้าว', '🟢 ปกติ': clinicalStats.bolt['🟢'], '🟡 เฝ้าระวัง': clinicalStats.bolt['🟡'], '🟠 เสี่ยงสูง': clinicalStats.bolt['🟠'], '🔴 วิกฤต': clinicalStats.bolt['🔴'] },
+    { name: 'ถดถอย', '🟢 ปกติ': clinicalStats.fog['🟢'], '🟡 เฝ้าระวัง': clinicalStats.fog['🟡'], '🟠 เสี่ยงสูง': clinicalStats.fog['🟠'], '🔴 วิกฤต': clinicalStats.fog['🔴'] },
+    { name: 'กังวลสังคม', '🟢 ปกติ': clinicalStats.socialanxiety['🟢'], '🟡 เฝ้าระวัง': clinicalStats.socialanxiety['🟡'], '🟠 เสี่ยงสูง': clinicalStats.socialanxiety['🟠'], '🔴 วิกฤต': clinicalStats.socialanxiety['🔴'] },
+    { name: 'ย้ำคิดย้ำทำ', '🟢 ปกติ': clinicalStats.ocd['🟢'], '🟡 เฝ้าระวัง': clinicalStats.ocd['🟡'], '🟠 เสี่ยงสูง': clinicalStats.ocd['🟠'], '🔴 วิกฤต': clinicalStats.ocd['🔴'] },
+    { name: 'หมดไฟ', '🟢 ปกติ': clinicalStats.burnout['🟢'], '🟡 เฝ้าระวัง': clinicalStats.burnout['🟡'], '🟠 เสี่ยงสูง': clinicalStats.burnout['🟠'], '🔴 วิกฤต': clinicalStats.burnout['🔴'] },
+    { name: 'สมาธิสั้น', '🟢 ปกติ': clinicalStats.adhd['🟢'], '🟡 เฝ้าระวัง': clinicalStats.adhd['🟡'], '🟠 เสี่ยงสูง': clinicalStats.adhd['🟠'], '🔴 วิกฤต': clinicalStats.adhd['🔴'] },
+    { name: 'หลงผิด', '🟢 ปกติ': clinicalStats.delusion['🟢'], '🟡 เฝ้าระวัง': clinicalStats.delusion['🟡'], '🟠 เสี่ยงสูง': clinicalStats.delusion['🟠'], '🔴 วิกฤต': clinicalStats.delusion['🔴'] },
+  ];
+
+  // Map brightFlagData to display readable labels in BarChart
+  const mappedBrightFlagData = brightFlagData.map(item => ({
+    name: flagLabels[item.name] || item.name,
+    value: item.value
+  }));
+
   if (loading && orgs.length === 0) {
     return (
       <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
@@ -586,7 +604,7 @@ export default function SuperDashboard() {
           </div>
         </div>
 
-        {/* 🕸️ KWI & QUADRANT CHARTS */}
+        {/* 🕸️ KWI & QUADRANT BAR CHARTS */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Global KWI Scores */}
           <div className="lg:col-span-2 relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex flex-col justify-between">
@@ -611,49 +629,26 @@ export default function SuperDashboard() {
             </div>
           </div>
 
-          {/* Quadrant Distribution */}
+          {/* Quadrant Distribution Bar Chart */}
           <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex flex-col justify-between">
-            <h3 className="font-bold text-sm text-slate-300 mb-4">🧩 สัดส่วนขั้วพฤติกรรมหลัก (Quadrants)</h3>
-            <div className="flex flex-col sm:flex-row items-center justify-around h-64">
-              <div className="w-1/2 h-full flex items-center justify-center">
-                {quadrantData.some(q => q.value > 0) ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={quadrantData.filter(d => d.value > 0)}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={55}
-                        outerRadius={75}
-                        paddingAngle={4}
-                        dataKey="value"
-                      >
-                        {quadrantData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="text-xs text-slate-500">ไม่มีข้อมูล</div>
-                )}
-              </div>
-              <div className="w-full sm:w-1/2 flex flex-col gap-2 mt-4 sm:mt-0 text-[11px]">
-                {quadrantData.map((item, index) => {
-                  const total = quadrantData.reduce((a, b) => a + b.value, 0);
-                  const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
-                  return (
-                    <div key={index} className="flex items-center justify-between text-slate-300">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                        <span>{item.name}</span>
-                      </div>
-                      <span className="font-bold text-white">{item.value} คน ({pct}%)</span>
-                    </div>
-                  );
-                })}
-              </div>
+            <h3 className="font-bold text-sm text-slate-300 mb-6">🧩 สัดส่วนขั้วพฤติกรรมหลัก (Quadrants Bar Chart)</h3>
+            <div className="w-full h-80">
+              {quadrantData.some(q => q.value > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={quadrantData} margin={{ bottom: 20 }}>
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
+                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                      {quadrantData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-xs text-slate-500">ไม่มีข้อมูลบุคลิกภาพ</div>
+              )}
             </div>
           </div>
         </div>
@@ -661,10 +656,33 @@ export default function SuperDashboard() {
         {/* 🧠 CLINICAL SIGNALS SECTION */}
         <div className="space-y-6">
           <div>
-            <h3 className="font-bold text-base text-slate-200">🧠 รายงานความเสี่ยงสุขภาวะจิตใจ (Clinical & Mental Health Signals)</h3>
+            <h3 className="font-bold text-base text-slate-200">🧠 สัญญาณความเสี่ยงสุขภาวะจิตใจ (Clinical & Mental Health Signals)</h3>
             <p className="text-xs text-slate-400 mt-1">
-              สรุปสัญญาณความเสี่ยงจิตวิทยาจาก category_flags แบ่งตามความรุนแรงระดับต่างๆ
+              สรุปสัญญาณความเสี่ยงจิตวิทยาจาก category_flags แบบแผนภูมิแท่งเปรียบเทียบและรายละเอียดยอดคน
             </p>
+          </div>
+
+          {/* New Stacked Bar Chart for clinical indicators */}
+          <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl">
+            <h3 className="font-bold text-sm text-slate-300 mb-6">📊 แผนภูมิแท่งเปรียบเทียบสัญญาณความเสี่ยงตามระดับความรุนแรง</h3>
+            <div className="w-full h-96">
+              {stats.totalUsers > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={clinicalChartData} margin={{ bottom: 10, top: 10 }}>
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
+                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                    <Bar dataKey="🟢 ปกติ" stackId="a" fill="#10B981" />
+                    <Bar dataKey="🟡 เฝ้าระวัง" stackId="a" fill="#F59E0B" />
+                    <Bar dataKey="🟠 เสี่ยงสูง" stackId="a" fill="#F97316" />
+                    <Bar dataKey="🔴 วิกฤต" stackId="a" fill="#EF4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-xs text-slate-500">ไม่มีข้อมูลสัญญาณเสี่ยงจิตวิทยาขณะนี้</div>
+              )}
+            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -681,49 +699,26 @@ export default function SuperDashboard() {
 
         {/* 💎 BRIGHT FLAGS & TYPES */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Bright Flag distribution */}
+          {/* Bright Flag Bar Chart */}
           <div className="relative overflow-hidden rounded-2xl p-6 bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-xl flex flex-col justify-between">
-            <h3 className="font-bold text-sm text-slate-300 mb-4">💎 สถิติธงสว่างไสวเด่น (Bright Flags)</h3>
-            <div className="flex flex-col sm:flex-row items-center justify-around h-64">
-              <div className="w-1/2 h-full flex items-center justify-center">
-                {brightFlagData.some(f => f.value > 0) ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={brightFlagData.filter(d => d.value > 0)}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={55}
-                        outerRadius={75}
-                        paddingAngle={4}
-                        dataKey="value"
-                      >
-                        {brightFlagData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="text-xs text-slate-500">ไม่มีข้อมูล</div>
-                )}
-              </div>
-              <div className="w-full sm:w-1/2 flex flex-col gap-2 mt-4 sm:mt-0 text-[11px]">
-                {brightFlagData.map((item, index) => {
-                  const total = brightFlagData.reduce((a, b) => a + b.value, 0);
-                  const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
-                  return (
-                    <div key={index} className="flex items-center justify-between text-slate-300">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                        <span>{flagLabels[item.name] || item.name}</span>
-                      </div>
-                      <span className="font-bold text-white">{item.value} คน ({pct}%)</span>
-                    </div>
-                  );
-                })}
-              </div>
+            <h3 className="font-bold text-sm text-slate-300 mb-6">💎 สถิติธงสว่างไสวเด่น (Bright Flags Bar Chart)</h3>
+            <div className="w-full h-80">
+              {brightFlagData.some(f => f.value > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={mappedBrightFlagData} margin={{ bottom: 20 }}>
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
+                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                      {mappedBrightFlagData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-xs text-slate-500">ไม่มีข้อมูลธงสว่างไสว</div>
+              )}
             </div>
           </div>
 
