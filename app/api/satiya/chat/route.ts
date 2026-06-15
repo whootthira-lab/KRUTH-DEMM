@@ -4,6 +4,14 @@ import { processSatiyaMessage, ChatMessage, ChatState } from '@/lib/satiya_coach
 import { analyzeSpeech8Layers } from '@/lib/satiya_analyzer';
 
 
+function evaluateCrisisKeywords(message: string): boolean {
+  const crisisTokens = [
+    "อยากตาย", "ไม่อยากอยู่แล้ว", "ทำร้ายตัวเอง", "ฆ่าตัวตาย", "ลาโลก",
+    "กินยาตาย", "โดดตึก", "ทรมานจนไม่อยากหายใจ", "จบชีวิต"
+  ];
+  return crisisTokens.some(token => message.includes(token));
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -16,6 +24,29 @@ export async function POST(req: NextRequest) {
 
     if (!userId || !message) {
       return NextResponse.json({ error: 'Missing userId or message' }, { status: 400 });
+    }
+
+    // 1. Crisis Guard Gate
+    if (evaluateCrisisKeywords(message)) {
+      const updatedState = {
+        ...(state || { isToxicMode: false, currentAqIndex: 0, aqAnswers: {} }),
+        safetyTriggered: true,
+        currentGoal: "EMERGENCY_SAFE_MODE"
+      };
+
+      try {
+        await supabase.from('satiya_chat_logs').insert([
+          { user_id: userId, sender: 'user', message: message },
+          { user_id: userId, sender: 'assistant', message: "ระบบตรวจพบภาวะวิกฤตความปลอดภัยและแนะนำสายด่วนสุขภาพจิต 1323" }
+        ]);
+      } catch (dbErr) { /* silent */ }
+
+      return NextResponse.json({
+        ok: true,
+        replyText: "ผม/ฉันรับรู้ได้เลยนะครับว่าสิ่งที่เธอ/คุณกำลังเผชิญอยู่ตรงหน้ามันหนักหนาและเหนื่อยล้าจนแทบไม่ไหวแล้ว... ในพื้นที่ตรงนี้ อยากชวนมาพักวางใจลงก่อนนะ ร่างกายและจิตใจอาจกำลังส่งสัญญาณว่าต้องการคนรับฟังที่เชี่ยวชาญ ลองโทรคุยกับพี่ๆ ผู้เชี่ยวชาญที่สายด่วนสุขภาพจิต 1323 ดูไหมครับ โทรฟรีตลอด 24 ชั่วโมง มีคนที่พร้อมโอบอุ้ม ปลอดภัย และอยู่ข้างๆ เธอเสมอนะครับ 🤍",
+        state: updatedState,
+        options: ["โทร 1323 สายด่วนสุขภาพจิต", "พักคุยสักครู่", "ขอบคุณสำหรับคำแนะนำ"]
+      });
     }
 
     // Default state if not provided

@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import Anthropic from '@anthropic-ai/sdk';
 import kbRaw from './satiya_kb.json';
+import { runDeterministicScorer } from './satiya_analyzer';
 const kb = kbRaw as any;
 
 const anthropic = new Anthropic({
@@ -17,6 +18,13 @@ export interface ChatState {
   isToxicMode: boolean;
   currentAqIndex: number;
   aqAnswers: Record<string, string>; // e.g., { AQ1: 'A', AQ2: 'B' }
+  currentGoal?: string;
+  pendingSlots?: string[];
+  currentDepthLevel?: number;
+  lastScenarioTriggered?: string;
+  userConversationalStyle?: string;
+  momentumWeightsBuffer?: Record<string, number>;
+  safetyTriggered?: boolean;
 }
 
 export interface UserProfile {
@@ -178,6 +186,80 @@ export async function callGenerativeAI(
 
   // 4. Fallback if all providers fail
   throw new Error("All LLM Router providers failed or are unconfigured");
+}
+
+/**
+ * Call Dialogue Router to decide coaching strategies, tones, and next scenarios
+ */
+async function callDialogueRouter(
+  chatHistory: ChatMessage[],
+  userMessage: string
+): Promise<any> {
+  const ROUTER_SYSTEM_PROMPT = `คุณคือ KRUTH MIND Dialogue Router Core ทำหน้าที่วิเคราะห์ข้อความล่าสุดของผู้ใช้และประวัติการสนทนาเพื่อเลือกกลยุทธ์การสนทนา โทนเสียง และฉากทัศน์คำถามจำลองถัดไป (Scenario Injection)
+
+กติกาการวิเคราะห์:
+- ask_decision: เลือก "SUMMARY_COACHING" หากประวัติการคุยยาวพอ (คุยกัน 4-5 ข้อความขึ้นไป) และพร้อมสำหรับการให้คำแนะนำแล้ว นอกเหนือจากนั้นเลือก "CONTINUE" เพื่อสนทนาต่อ
+- chosen_strategy: PROGRESSIVE_CLARIFICATION (ถามเพื่อความกระจ่าง), ADAPTIVE_TONE (ปรับโทน), EMOTIONAL_CUSHIONING (ใส่เบาะรองอารมณ์)
+- next_scenario_id: หากยังอยู่ในโหมดเก็บข้อมูล (CONTINUE) ให้เลือกฉากทัศน์ชวนคิดถัดไปที่เหมาะสมที่สุดในบริบท (SC_A ถึง SC_J) หากพร้อมคุยสรุปแล้วให้คืนค่า null
+
+จงส่งผลลัพธ์กลับมาเป็นโครงสร้าง JSON ชุดนี้เท่านั้น ห้ามมีคำอธิบายหรือ Markdown block ใดๆ นอกเหนือจาก JSON:
+{
+  "ask_decision": "CONTINUE" | "SUMMARY_COACHING",
+  "target_dimension": "VITALITY" | "MEANING" | "CONNECTION" | "MASTERY" | "RESILIENCE",
+  "chosen_strategy": "PROGRESSIVE_CLARIFICATION" | "ADAPTIVE_TONE" | "EMOTIONAL_CUSHIONING",
+  "adaptive_tone": "GENTLE_AND_REFLECTIVE" | "ANALYTICAL_FOCUS" | "SUPPORTIVE_WARM",
+  "inject_emotional_cushion": boolean,
+  "next_scenario_id": "SC_A" | "SC_B" | "SC_C" | "SC_D" | "SC_E" | "SC_F" | "SC_G" | "SC_H" | "SC_I" | "SC_J" | null
+}`;
+
+  try {
+    const messages = [
+      { role: 'system', content: ROUTER_SYSTEM_PROMPT },
+      ...chatHistory.slice(-6).map(m => ({ role: m.role, content: m.content })),
+      { role: 'user', content: userMessage }
+    ];
+
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("No OpenAI API key for Dialogue Router");
+    }
+
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: messages,
+        response_format: { type: 'json_object' },
+        max_tokens: 300
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content;
+      if (text) {
+        return JSON.parse(text.trim());
+      }
+    } else {
+      const err = await res.text();
+      console.warn("Dialogue Router OpenAI returned non-OK:", err);
+    }
+  } catch (err) {
+    console.error("Dialogue Router failed, using default fallback:", err);
+  }
+
+  // Fallback default
+  return {
+    ask_decision: "CONTINUE",
+    target_dimension: "CONNECTION",
+    chosen_strategy: "PROGRESSIVE_CLARIFICATION",
+    adaptive_tone: "GENTLE_AND_REFLECTIVE",
+    inject_emotional_cushion: true,
+    next_scenario_id: null
+  };
 }
 
 /**
@@ -406,6 +488,69 @@ ${recommendedTheories}
   }
 
   // 4. STANDARD WELLBEING COACH MODE (NON-TOXIC)
+  // Initialize Dialogue Router State
+  if (!updatedState.pendingSlots) {
+    updatedState.pendingSlots = ["F_hope", "F_support", "F_sorry", "F_understand", "F_care"];
+    updatedState.currentGoal = "assess_wellbeing";
+    updatedState.currentDepthLevel = 1;
+  }
+
+  // 4.1 Deterministic Slot Scanning Gate (TypeScript side)
+  const msgLower = userMessage.toLowerCase();
+  const slotKeywords: Record<string, string[]> = {
+    F_hope: ["หวัง", "วันข้างหน้า", "อนาคต", "โอกาส", "สู้"],
+    F_support: ["ช่วย", "สนับสนุน", "ให้กำลังใจ", "ดูแล", "เข้าใจกัน"],
+    F_sorry: ["ขอโทษ", "เสียใจ", "ขออภัย", "ผิดไปแล้ว"],
+    F_understand: ["เข้าใจ", "เห็นใจ", "ยอมรับ", "แชร์"],
+    F_care: ["ห่วง", "เป็นห่วง", "ห่วงใย", "แคร์", "รัก"]
+  };
+
+  Object.entries(slotKeywords).forEach(([slot, keywords]) => {
+    if (keywords.some(kw => msgLower.includes(kw))) {
+      updatedState.pendingSlots = updatedState.pendingSlots?.filter(s => s !== slot);
+    }
+  });
+
+  const userMsgCount = chatHistory.filter(m => m.role === 'user').length;
+  let forceCoachingSummary = false;
+  if ((updatedState.pendingSlots?.length === 0) || userMsgCount >= 4) {
+    updatedState.currentGoal = "COACHING_SUMMARY";
+    forceCoachingSummary = true;
+  }
+
+  // 4.2 Cognitive Strategy Router Call
+  let routerDecision = {
+    ask_decision: forceCoachingSummary ? "SUMMARY_COACHING" : "CONTINUE",
+    target_dimension: "CONNECTION",
+    chosen_strategy: "PROGRESSIVE_CLARIFICATION",
+    adaptive_tone: "GENTLE_AND_REFLECTIVE",
+    inject_emotional_cushion: true,
+    next_scenario_id: null as string | null
+  };
+
+  if (!forceCoachingSummary) {
+    routerDecision = await callDialogueRouter(chatHistory, userMessage);
+  }
+
+  const SCENARIOS: Record<string, string> = {
+    SC_A: `หากเธอจำเป็นต้องเลือกระหว่างความถูกต้องของกติกาโรงเรียน/องค์กร กับผลประโยชน์ของเพื่อนร่วมกลุ่มที่กำลังเดือดร้อน เธอจะตัดสินใจอย่างไร?`,
+    SC_B: `ถ้าอยู่ๆ มีเพื่อนในทีมเดินมาขึ้นเสียงใส่เธอต่อหน้าคนเยอะๆ ทั้งที่เธอไม่ได้ทำอะไรผิด สิ่งแรกที่เธอจะตอบโต้หรือทำคืออะไร?`,
+    SC_C: `เมื่อผลงานหรืองานวิจัยที่เธอทุ่มเททำสำเร็จจนได้รับรางวัลใหญ่ชื่นชม ลึกๆ เธอรู้สึกว่ามันสำเร็จเพราะอะไร และจะพูดคุยเรื่องนี้กับทีมอย่างไร?`,
+    SC_D: `หากแผนงานที่วางไว้พังลงต่อหน้าต่อตาเพราะสมาชิกคนหนึ่งในกิลด์/ในทีมทำพลาด ความคิดแรกสุดที่โผล่ขึ้นมาในใจเธอคืออะไร?`,
+    SC_E: `ถ้าเห็นเพื่อนสนิทเดินมาระบายด้วยแววตาหมดหวังว่า 'เหนื่อยมาก ไม่อยากสู้ต่อแล้ว' ประโยคแรกที่เธอจะพูดเพื่อดึงสติและปลอบเขาคืออะไร?`,
+    SC_F: `เวลาเห็นคนอื่นทำพฤติกรรมที่เธอรู้สึกว่าไม่เหมาะสม ขัดหูขัดตาปะทะตรงหน้า ความรู้สึกในใจมันบอกเธอว่าอย่างไร และเธอมีวิธีจัดการความรู้สึกนั้นอย่างไร?`,
+    SC_G: `ในจังหวะที่เกมตามหลังหนักๆ หรือชีวิตจริงเจอเรื่องกดดันอึดอัดใจจนขีดสุด ปกติเธอมีคำพูดติดปากหรือสไตล์ข้อความระบายความโกรธแบบไหน?`,
+    SC_H: `ถ้าทีมต้องการคนยอมสละเวลาส่วนตัวช่วงวันหยุดมาช่วยแก้งานด่วนเพื่อเซฟระบบภาพรวม โดยไม่มีค่าตอบแทนพิเศษเพิ่ม เธอจะตอบรับอย่างไร?`,
+    SC_I: `หากเธอพบว่าคุณครูหรือหัวหน้างานประเมินคะแนน/ให้โบนัสเพื่อนร่วมเลนร่วมทีมเยอะกว่าเธอ ทั้งที่เธอทำงานหนักเท่ากัน เธอจะมีแนวทางคุยเรื่องนี้อย่างไร?`,
+    SC_J: `ในวันที่เธอเองก็พลังงานหมดกายเหนื่อยใจมาก (Low Vitality) แต่คนรอบตัวเดินเข้ามาขอความช่วยเหลือขอคำปรึกษาพร้อมกัน เธอจะจัดการบาลานซ์มันอย่างไร?`
+  };
+
+  let scenarioText = "";
+  if (routerDecision.next_scenario_id) {
+    scenarioText = SCENARIOS[routerDecision.next_scenario_id] || "";
+    updatedState.lastScenarioTriggered = routerDecision.next_scenario_id;
+  }
+
   const patternId = profile.wellbeing_pattern || 'P006_COASTING';
   const matchedPattern = kb.wellbeing_patterns.find((p: any) => p.Pattern_ID === patternId || p.Archetype === profile?.archetype_id);
   const patternName = matchedPattern?.Wellbeing_State || 'Healthy Coasting (ดีตามเกณฑ์)';
@@ -459,6 +604,27 @@ ${recommendedTheories}
 
   systemPrompt += `\n\nข้อมูลทฤษฎีทางจิตวิทยาและคำแนะนำทางเลือกที่ระบบคัดสรรให้เหมาะสมกับระดับคะแนนมิติที่ต้องดูแล:\n${matchedTheories}`;
   systemPrompt += `\nแนะนำกิจกรรมพัฒนาสุขภาวะ: ${patternActivity}`;
+
+  // Custom dialogue state guidelines
+  systemPrompt += `\n\n[สถานะกลยุทธ์ของระบบ (Dialogue Strategy Guidance)]`;
+  if (routerDecision.inject_emotional_cushion) {
+    systemPrompt += `\n- คุณต้องเริ่มต้นประโยคแรกด้วย "เบาะรองอารมณ์" (Emotional Cushioning) เพื่อซับอารมณ์ ปลอบโยน ยอมรับ หรือแสดงความเข้าใจในความรู้สึกของผู้ใช้อย่างอบอุ่นก่อนเสมอ`;
+  }
+  
+  if (routerDecision.adaptive_tone === "GENTLE_AND_REFLECTIVE") {
+    systemPrompt += `\n- โทนเสียงและการพูดคุย: Gentle and Reflective (ใช้คำสุภาพ อ่อนโยน เน้นการกระตุ้นให้เกิดการไตร่ตรองสภาวะอารมณ์ภายใน)`;
+  } else if (routerDecision.adaptive_tone === "ANALYTICAL_FOCUS") {
+    systemPrompt += `\n- โทนเสียงและการพูดคุย: Analytical Focus (เน้นการอธิบายด้วยเหตุและผล การจัดระเบียบตรรกะความคิดอย่างสร้างสรรค์)`;
+  } else if (routerDecision.adaptive_tone === "SUPPORTIVE_WARM") {
+    systemPrompt += `\n- โทนเสียงและการพูดคุย: Supportive and Warm (เน้นการชมเชยจุดแข็ง ให้ความไว้วางใจ และให้กำลังใจชวนก้าวข้ามปัญหา)`;
+  }
+
+  if (routerDecision.ask_decision === "SUMMARY_COACHING") {
+    systemPrompt += `\n- [โหมดให้คำปรึกษาและสรุปผล]: คุณได้ประเมินมิติต่างๆ ครบถ้วนแล้ว จงทำการสรุปผลลัพธ์สุขภาวะของผู้ใช้ ให้คำแนะนำการบริหารดูแลใจเฉพาะบุคคลโดยดึงจุดแข็งมาเติมเต็มจุดอ่อน และสรุปเซสชันการคุยอย่างเป็นมิตร`;
+  } else {
+    systemPrompt += `\n- [โหมดสแกนพฤติกรรม]: คุณกำลังอยู่ระหว่างเก็บข้อมูลพฤติกรรม หากมีฉากทัศน์ชวนคิดด้านล่างนี้ ให้สอดแทรกคำถามนี้เพื่อชวนคุยอย่างเป็นธรรมชาติและไม่บังคับ: \n"${scenarioText}"`;
+  }
+
   systemPrompt += `\n\nกฎการคุยของ Satiya AI Coach:
 1. แนะนำข้อคิดอย่างอบอุ่น อ่อนโยน เข้าใจง่าย และไม่ตัดสิน
 2. ห้ามพูดเชิงการแพทย์: ห้ามใช้คำว่า "โรค", "ผิดปกติ", "วินิจฉัย", "อาการ", "บำบัดรักษา"
@@ -486,14 +652,31 @@ ${recommendedTheories}
       .replace('{pattern_activity}', patternActivity);
   }
 
+  // Generate dynamic options
+  let dynamicOptions = [
+    `แนะนำวิธีเพิ่ม ${lowestDim.name}`,
+    `วิเคราะห์ Archetype ของฉันด่วน`,
+    `ขอแนวทางจัดระเบียบความคิด`,
+    `ปรึกษาปัญหาเรื่องงานเครียด`
+  ];
+
+  if (routerDecision.ask_decision === "SUMMARY_COACHING") {
+    dynamicOptions = [
+      "สรุปแนวทางพัฒนาสุขภาวะเฉพาะตัว",
+      "ขอบคุณสำหรับคำแนะนำทั้งหมด",
+      "เริ่มทำการประเมินมิติใหม่อีกครั้ง"
+    ];
+  } else if (routerDecision.next_scenario_id) {
+    dynamicOptions = [
+      "ขอตอบฉากทัศน์ชวนคิดนี้",
+      `ขอกลยุทธ์พัฒนา ${routerDecision.target_dimension}`,
+      "แนะนำเรื่องอื่นแทนได้ไหมคะ"
+    ];
+  }
+
   return {
     replyText,
     updatedState,
-    options: [
-      `แนะนำวิธีเพิ่ม ${lowestDim.name}`,
-      `วิเคราะห์ Archetype ของฉันด่วน`,
-      `ขอแนวทางจัดระเบียบความคิด`,
-      `ปรึกษาปัญหาเรื่องงานเครียด`
-    ]
+    options: dynamicOptions
   };
 }
