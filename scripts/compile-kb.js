@@ -22,12 +22,21 @@ const theoriesPath = path.join(baseDir, 'Psychology_Theories_KB.xlsx');
 if (fs.existsSync(theoriesPath)) {
   try {
     const wb = XLSX.readFile(theoriesPath);
-    if (wb.Sheets['Theories']) {
-      compiledKB.theories = XLSX.utils.sheet_to_json(wb.Sheets['Theories']);
-      console.log(`- Loaded ${compiledKB.theories.length} theories`);
+    const theoriesSheet = wb.Sheets['Theories_Master'] || wb.Sheets['Theories'];
+    if (theoriesSheet) {
+      const rawTheories = XLSX.utils.sheet_to_json(theoriesSheet);
+      compiledKB.theories = rawTheories.map(row => ({
+        Theory_ID: row.theory_id || row.Theory_ID || '',
+        Name: row.theory_name || row.Name || '',
+        Source: row.evidence_level || row.Source || '',
+        Key_Principles: row.core_concept || row.Key_Principles || '',
+        Application_Steps: row.explain_to_user || row.Application_Steps || ''
+      }));
+      console.log(`- Loaded ${compiledKB.theories.length} theories (mapped from Theories_Master)`);
     }
-    if (wb.Sheets['Mappings']) {
-      compiledKB.theory_mappings = XLSX.utils.sheet_to_json(wb.Sheets['Mappings']);
+    const mappingsSheet = wb.Sheets['Mappings'] || wb.Sheets['Theory_Selector_Rules'];
+    if (mappingsSheet) {
+      compiledKB.theory_mappings = XLSX.utils.sheet_to_json(mappingsSheet);
       console.log(`- Loaded ${compiledKB.theory_mappings.length} theory mappings`);
     }
   } catch (e) {
@@ -58,17 +67,28 @@ const toxicKbPath = path.join(baseDir, 'Toxic_Workplace_KB.xlsx');
 if (fs.existsSync(toxicKbPath)) {
   try {
     const wb = XLSX.readFile(toxicKbPath);
-    if (wb.Sheets['Workplace_Dimensions']) {
-      compiledKB.toxic_workplace_dimensions = XLSX.utils.sheet_to_json(wb.Sheets['Workplace_Dimensions']);
+    const dimensionsSheet = wb.Sheets['Toxic_Pattern_Library'] || wb.Sheets['Workplace_Dimensions'];
+    if (dimensionsSheet) {
+      compiledKB.toxic_workplace_dimensions = XLSX.utils.sheet_to_json(dimensionsSheet);
       console.log(`- Loaded ${compiledKB.toxic_workplace_dimensions.length} toxic workplace dimensions`);
     }
-    if (wb.Sheets['Toxic_Scoring_Rules']) {
-      compiledKB.toxic_scoring_rules = XLSX.utils.sheet_to_json(wb.Sheets['Toxic_Scoring_Rules']);
+    const scoringSheet = wb.Sheets['Toxic_Scoring_Rules'];
+    if (scoringSheet) {
+      compiledKB.toxic_scoring_rules = XLSX.utils.sheet_to_json(scoringSheet);
       console.log(`- Loaded ${compiledKB.toxic_scoring_rules.length} toxic scoring rules`);
     }
-    if (wb.Sheets['Questions']) {
-      compiledKB.toxic_questions = XLSX.utils.sheet_to_json(wb.Sheets['Questions']);
-      console.log(`- Loaded ${compiledKB.toxic_questions.length} toxic questions`);
+    const questionsSheet = wb.Sheets['Assessment_Questions'] || wb.Sheets['Questions'];
+    if (questionsSheet) {
+      const rawQuestions = XLSX.utils.sheet_to_json(questionsSheet);
+      compiledKB.toxic_questions = rawQuestions.map(row => ({
+        Q_ID: row.q_id || row.Q_ID || '',
+        Question_TH: row.question_th || row.Question_TH || '',
+        ChoiceA: row.choice_A || row.ChoiceA || '',
+        ChoiceB: row.choice_B || row.ChoiceB || '',
+        ChoiceC: row.choice_C || row.ChoiceC || '',
+        ChoiceD: row.choice_D || row.ChoiceD || ''
+      }));
+      console.log(`- Loaded ${compiledKB.toxic_questions.length} toxic questions (mapped from Assessment_Questions)`);
     }
   } catch (e) {
     console.error("Error reading Toxic_Workplace_KB.xlsx:", e.message);

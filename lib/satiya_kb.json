@@ -1,6 +1,317 @@
 {
-  "theories": [],
-  "theory_mappings": [],
+  "theories": [
+    {
+      "Theory_ID": "TA_001",
+      "Name": "Transactional Analysis",
+      "Source": "High (Eric Berne, 1964)",
+      "Key_Principles": "สื่อสาร 3 โหมด: Parent (สั่ง/ดูแล) / Adult (เหตุผล) / Child (อารมณ์) — ขัดแย้งเมื่อโหมดไม่ตรงกัน",
+      "Application_Steps": "ทุกการสื่อสารเกิดจาก 'โหมด' ภายใน 3 แบบ — Adult ↔ Adult คือโหมดที่สร้างสรรค์ที่สุด เพราะใช้เหตุผล ไม่ใช่อารมณ์หรืออำนาจ"
+    },
+    {
+      "Theory_ID": "GT_001",
+      "Name": "Gottman's Method",
+      "Source": "Very High (Gottman Institute)",
+      "Key_Principles": "4 พฤติกรรมทำลายความสัมพันธ์: Criticism (วิจารณ์ตัวตน) / Contempt (ดูถูก) / Defensiveness (แก้ตัว) / Stonewalling (เงียบหนี)",
+      "Application_Steps": "ความสัมพันธ์ที่ดีต้องมี Positive Ratio 5:1 — คือมี interaction ดี 5 ครั้ง ต่อ ขัดแย้ง 1 ครั้ง"
+    },
+    {
+      "Theory_ID": "AT_001",
+      "Name": "Attachment Theory",
+      "Source": "Very High (Bowlby, Ainsworth)",
+      "Key_Principles": "รูปแบบความผูกพัน 4 แบบ: Secure / Anxious / Avoidant / Disorganized — เกิดจากวัยเด็กแต่ส่งผลถึงผู้ใหญ่",
+      "Application_Steps": "รูปแบบความผูกพันที่เราพัฒนาตอนเด็กยังคงทำงานอยู่ในผู้ใหญ่ — แต่เปลี่ยนได้ด้วยความตั้งใจ"
+    },
+    {
+      "Theory_ID": "PS_001",
+      "Name": "Psychological Safety",
+      "Source": "Very High (Edmondson, Google Project Aristotle)",
+      "Key_Principles": "ทีมที่มี Psychological Safety คือที่ที่สมาชิกกล้าพูด กล้าเสี่ยง กล้าล้มเหลว โดยไม่กลัวถูกตำหนิ",
+      "Application_Steps": "ทีมที่ประสบความสำเร็จไม่ได้มาจากความฉลาดของสมาชิก แต่จากความปลอดภัยที่ทำให้กล้าพูดความจริง"
+    },
+    {
+      "Theory_ID": "SE_001",
+      "Name": "Social Exchange Theory",
+      "Source": "High (Thibaut & Kelley)",
+      "Key_Principles": "ความสัมพันธ์ดำรงอยู่เมื่อ Cost < Benefit — คนประเมิน reward vs effort อยู่ตลอด",
+      "Application_Steps": "ทุกความสัมพันธ์มีการ 'คิดบัญชี' แบบไม่รู้ตัว — การทำให้คนอื่นเห็นคุณค่าของสิ่งที่คุณให้ = เพิ่ม Benefit"
+    },
+    {
+      "Theory_ID": "HL_001",
+      "Name": "Habit Loop",
+      "Source": "High (Duhigg 2012, Clear 2018)",
+      "Key_Principles": "นิสัย = Cue (สัญญาณ) → Routine (พฤติกรรม) → Reward (รางวัล) — เปลี่ยน Routine โดยคง Cue และ Reward",
+      "Application_Steps": "ไม่มีนิสัยที่ 'ดี' หรือ 'ไม่ดี' — มีแค่ Cue-Routine-Reward ที่เราเลือกหรือไม่ได้เลือก"
+    },
+    {
+      "Theory_ID": "GM_001",
+      "Name": "Growth Mindset",
+      "Source": "Very High (Dweck 2006)",
+      "Key_Principles": "Fixed Mindset: ความสามารถตายตัว ล้มเหลว=ไม่มีความสามารถ | Growth Mindset: ความสามารถพัฒนาได้ ล้มเหลว=เรียนรู้",
+      "Application_Steps": "สมองเปลี่ยนได้ตลอดชีวิต — ทุกครั้งที่เรียนรู้จากความผิดพลาด = synapse ใหม่"
+    },
+    {
+      "Theory_ID": "SD_001",
+      "Name": "Self-Determination Theory",
+      "Source": "Very High (Deci & Ryan 1985)",
+      "Key_Principles": "แรงจูงใจที่ยั่งยืนมาจาก 3 ความต้องการพื้นฐาน: Autonomy (อิสระ) + Competence (ความสามารถ) + Relatedness (ความสัมพันธ์)",
+      "Application_Steps": "External reward (เงิน เกรด) ทำลาย Internal motivation ระยะยาว — ค้นหาว่า 'ทำไมถึงทำ' เพื่อสุขภาพจิตดีกว่า"
+    },
+    {
+      "Theory_ID": "CB_001",
+      "Name": "Cognitive Behavioral Therapy",
+      "Source": "Very High (Beck 1979) — Gold Standard",
+      "Key_Principles": "ความคิด → อารมณ์ → พฤติกรรม: เปลี่ยนรูปแบบความคิด (Cognitive Distortion) → อารมณ์และพฤติกรรมเปลี่ยน",
+      "Application_Steps": "ความคิดไม่ใช่ความจริง — เป็นแค่ 'เสียงในหัว' ที่อาจผิดก็ได้ เราเลือกเชื่อหรือไม่เชื่อได้"
+    },
+    {
+      "Theory_ID": "AC_001",
+      "Name": "Acceptance & Commitment Therapy",
+      "Source": "High (Hayes 1999)",
+      "Key_Principles": "ไม่ต่อสู้กับความคิด/อารมณ์ที่ไม่ดี แต่ยอมรับ แล้วเดินหน้าตามค่านิยม (Values) ที่แท้จริง",
+      "Application_Steps": "ความสุขไม่ใช่เป้าหมาย — ชีวิตที่มีความหมายคือเป้าหมาย แม้จะมีความเจ็บปวดปนอยู่"
+    },
+    {
+      "Theory_ID": "EI_001",
+      "Name": "Emotional Intelligence",
+      "Source": "High (Goleman 1995, Salovey & Mayer)",
+      "Key_Principles": "EI 4 องค์ประกอบ: Self-Awareness / Self-Regulation / Empathy / Social Skills — วัดด้วยผลสัมฤทธิ์ไม่ใช่ IQ",
+      "Application_Steps": "อารมณ์ให้ข้อมูล — ไม่ใช่ศัตรูที่ต้องกด แต่เป็นสัญญาณที่ต้องอ่าน"
+    },
+    {
+      "Theory_ID": "PT_001",
+      "Name": "Perspective Taking",
+      "Source": "High (Davis 1980)",
+      "Key_Principles": "ฝึกมองสถานการณ์จากมุมมองของอีกฝ่าย — ไม่ใช่ Sympathy (เสียใจแทน) แต่ Empathy (เข้าใจจริง)",
+      "Application_Steps": "ทุกคนมีเหตุผลที่สมเหตุสมผลสำหรับตัวเอง — แม้แต่พฤติกรรมที่เราไม่ชอบก็มี 'เหตุผล' อยู่เบื้องหลัง"
+    },
+    {
+      "Theory_ID": "CR_001",
+      "Name": "Conflict Resolution (Thomas-Kilmann)",
+      "Source": "High (Thomas & Kilmann 1974)",
+      "Key_Principles": "5 styles: Competing (ชนะ) / Collaborating (ร่วมมือ) / Compromising (ประนีประนอม) / Avoiding (หลีกเลี่ยง) / Accommodating (ยอม) — ไม่มีแบบดีสุด ขึ้นกับบริบท",
+      "Application_Steps": "คนส่วนใหญ่ใช้แค่ 1-2 style โดยอัตโนมัติ — เรียนรู้ใช้ทุก style ตามสถานการณ์ = ทักษะสำคัญ"
+    },
+    {
+      "Theory_ID": "AI_001",
+      "Name": "Appreciative Inquiry",
+      "Source": "High (Cooperrider 1987)",
+      "Key_Principles": "แทนที่จะโฟกัสปัญหา ให้ถามว่า 'อะไรที่ทำงานได้ดี?' แล้วขยายสิ่งนั้น — 4-D: Discover, Dream, Design, Destiny",
+      "Application_Steps": "สมองที่โฟกัสปัญหาตลอด → หดตัว สร้างสรรค์น้อยลง | สมองที่โฟกัสความเป็นไปได้ → ขยาย มีพลัง"
+    },
+    {
+      "Theory_ID": "MI_001",
+      "Name": "Motivational Interviewing",
+      "Source": "Very High (Miller & Rollnick)",
+      "Key_Principles": "ใช้คำถามที่ดึงแรงจูงใจภายในของอีกฝ่าย ไม่ใช่บอกให้เปลี่ยน — ผู้ฟังที่ดีทำให้คนอยากเปลี่ยนเอง",
+      "Application_Steps": "คนเปลี่ยนแปลงเมื่อพวกเขาได้ยินตัวเองพูดเหตุผลของการเปลี่ยน — ไม่ใช่เมื่อถูกบอก"
+    }
+  ],
+  "theory_mappings": [
+    {
+      "rule_id": "R001",
+      "situation_type": "work_relationship",
+      "demm_condition_1": "jung_user=TJ AND jung_other=FP",
+      "demm_condition_2": "quad_mismatch=True",
+      "flag_condition": "",
+      "primary_theory": "TA_001",
+      "secondary_theory": "PT_001",
+      "priority": "1",
+      "rationale_th": "TJ กับ FP สื่อสารคนละ mode — Adult ↔ Adult ช่วยลด friction ได้ดีที่สุด",
+      "contraindication": "ถ้า Social Anxiety → ลด intensity ลง"
+    },
+    {
+      "rule_id": "R002",
+      "situation_type": "work_relationship",
+      "demm_condition_1": "high_N (score_n >= 3.5)",
+      "demm_condition_2": "compat_score < 60",
+      "flag_condition": "Bolt",
+      "primary_theory": "EI_001",
+      "secondary_theory": "GT_001",
+      "priority": "1",
+      "rationale_th": "N สูง + compat ต่ำ = เสี่ยง Contempt และ Defensiveness — EI ช่วยก่อน แล้ว Gottman เสริม",
+      "contraindication": "ถ้า Bolt → ส่งต่อผู้เชี่ยวชาญ ไม่ใช่ checklist"
+    },
+    {
+      "rule_id": "R003",
+      "situation_type": "work_relationship",
+      "demm_condition_1": "quad_user=Q4 AND quad_other=Q3",
+      "demm_condition_2": "role_friction_score >= 2",
+      "flag_condition": "",
+      "primary_theory": "TA_001",
+      "secondary_theory": "SE_001",
+      "priority": "2",
+      "rationale_th": "Q4 Builder vs Q3 Connector — TA ช่วยสื่อสาร Adult mode, SE ช่วยเข้าใจว่าคู่ต้องการอะไร",
+      "contraindication": ""
+    },
+    {
+      "rule_id": "R004",
+      "situation_type": "work_relationship",
+      "demm_condition_1": "quad_user=Q2 AND quad_other=Q1",
+      "demm_condition_2": "low_E (score_e < 2.0)",
+      "flag_condition": "Fog",
+      "primary_theory": "PS_001",
+      "secondary_theory": "PT_001",
+      "priority": "2",
+      "rationale_th": "Q2 เก็บตัว ทำงานกับ Q1 ที่ชอบ engage — สร้าง Psych Safety ก่อนให้ Q2 กล้าแสดงออก",
+      "contraindication": ""
+    },
+    {
+      "rule_id": "R005",
+      "situation_type": "work_relationship",
+      "demm_condition_1": "compat_score < 45",
+      "demm_condition_2": "interaction_weight < -1.5",
+      "flag_condition": "",
+      "primary_theory": "CR_001",
+      "secondary_theory": "AI_001",
+      "priority": "1",
+      "rationale_th": "Compat ต่ำมาก + interaction ลด wellbeing — ต้องจัดการ conflict ก่อน แล้วค่อย rebuild",
+      "contraindication": "ถ้าต้องการ mediator จริงๆ → แนะนำ HR"
+    },
+    {
+      "rule_id": "R006",
+      "situation_type": "work_relationship",
+      "demm_condition_1": "via_user=J AND via_other=C",
+      "demm_condition_2": "justice_vs_courage_clash",
+      "flag_condition": "",
+      "primary_theory": "SE_001",
+      "secondary_theory": "CR_001",
+      "priority": "3",
+      "rationale_th": "J(ยุติธรรม) vs C(กล้าหาญ) อาจเห็นต่างเรื่อง approach — Social Exchange ช่วยหาจุดร่วม",
+      "contraindication": ""
+    },
+    {
+      "rule_id": "R007",
+      "situation_type": "team_dynamics",
+      "demm_condition_1": "team_rain_pct > 30",
+      "demm_condition_2": "team_wellbeing_trend=declining",
+      "flag_condition": "Rain(ทีม)",
+      "primary_theory": "AI_001",
+      "secondary_theory": "PS_001",
+      "priority": "1",
+      "rationale_th": "ทีมพลังงานต่ำ — Appreciative Inquiry สร้าง positive momentum ก่อน",
+      "contraindication": "ต้องได้รับความร่วมมือ Leader"
+    },
+    {
+      "rule_id": "R008",
+      "situation_type": "team_dynamics",
+      "demm_condition_1": "team_e_avg < 2.5",
+      "demm_condition_2": "team_flag_pct > 40",
+      "flag_condition": "Fog(ทีม)",
+      "primary_theory": "PS_001",
+      "secondary_theory": "AI_001",
+      "priority": "1",
+      "rationale_th": "ทีมเก็บตัวมาก ไม่กล้าพูด — Psych Safety คือรากฐานที่ต้องสร้างก่อน",
+      "contraindication": "Leader ต้องเปลี่ยนพฤติกรรมก่อน ถ้าไม่พร้อมไม่ได้ผล"
+    },
+    {
+      "rule_id": "R009",
+      "situation_type": "team_dynamics",
+      "demm_condition_1": "role=admin AND team_change_resistance=high",
+      "demm_condition_2": "",
+      "flag_condition": "",
+      "primary_theory": "MI_001",
+      "secondary_theory": "AI_001",
+      "priority": "2",
+      "rationale_th": "ลูกทีมต้านการเปลี่ยนแปลง — MI ดึงแรงจูงใจภายในแทนการบังคับ",
+      "contraindication": ""
+    },
+    {
+      "rule_id": "R010",
+      "situation_type": "personal_growth",
+      "demm_condition_1": "low_C (score_c < 2.5)",
+      "demm_condition_2": "adhd_signal=",
+      "flag_condition": "ADHD",
+      "primary_theory": "HL_001",
+      "secondary_theory": "SD_001",
+      "priority": "1",
+      "rationale_th": "C ต่ำ + ADHD signal — Habit Loop ช่วยสร้างโครงสร้าง, SD ช่วยหาแรงจูงใจภายใน",
+      "contraindication": "ถ้า ADHD → อาจต้องการ coach จริงๆ"
+    },
+    {
+      "rule_id": "R011",
+      "situation_type": "personal_growth",
+      "demm_condition_1": "high_N (score_n >= 3.5)",
+      "demm_condition_2": "burnout_signal=",
+      "flag_condition": "Burnout, Rain",
+      "primary_theory": "GM_001",
+      "secondary_theory": "CB_001",
+      "priority": "1",
+      "rationale_th": "N สูง + Burnout — Growth Mindset ปรับกรอบ, CBT แก้ความคิดลบ",
+      "contraindication": "ถ้า Burnout → ACT ก่อน CBT"
+    },
+    {
+      "rule_id": "R012",
+      "situation_type": "personal_growth",
+      "demm_condition_1": "ocd_signal=",
+      "demm_condition_2": "high_C (score_c >= 4.0)",
+      "flag_condition": "OCD",
+      "primary_theory": "AC_001",
+      "secondary_theory": "GM_001",
+      "priority": "1",
+      "rationale_th": "OCD signal — ACT ช่วย defusion จากความคิดซ้ำ ดีกว่า CBT ที่อาจเพิ่มการ analyze",
+      "contraindication": ""
+    },
+    {
+      "rule_id": "R013",
+      "situation_type": "personal_growth",
+      "demm_condition_1": "burnout_signal=",
+      "demm_condition_2": "",
+      "flag_condition": "Burnout",
+      "primary_theory": "AC_001",
+      "secondary_theory": "SD_001",
+      "priority": "1",
+      "rationale_th": "Burnout ระดับสูง — ACT ช่วยยอมรับสภาพ, SD ช่วยหา Values ที่แท้จริง ก่อนสร้างนิสัยใหม่",
+      "contraindication": "ห้ามใช้ Habit Loop ก่อน — ต้องพักก่อน"
+    },
+    {
+      "rule_id": "R014",
+      "situation_type": "personal_growth",
+      "demm_condition_1": "score_o < 2.5",
+      "demm_condition_2": "score_c >= 4.5",
+      "flag_condition": "",
+      "primary_theory": "GM_001",
+      "secondary_theory": "AC_001",
+      "priority": "2",
+      "rationale_th": "O ต่ำ + C สูง = Fixed Mindset + Perfectionism — Growth Mindset เปิดประตูก่อน ACT",
+      "contraindication": ""
+    },
+    {
+      "rule_id": "R015",
+      "situation_type": "personal_growth",
+      "demm_condition_1": "social_anxiety=",
+      "demm_condition_2": "score_e <= 1.5",
+      "flag_condition": "Social Anxiety",
+      "primary_theory": "CB_001",
+      "secondary_theory": "AT_001",
+      "priority": "1",
+      "rationale_th": "Social Anxiety — CBT แก้ความคิดที่บิดเบือน, Attachment ช่วยเข้าใจรูปแบบความสัมพันธ์",
+      "contraindication": "ไม่ใช้ Gottman ก่อน (กดดันเกิน)"
+    },
+    {
+      "rule_id": "R016",
+      "situation_type": "work_relationship",
+      "demm_condition_1": "quad_user=Q4 AND manager_style=critical_parent",
+      "demm_condition_2": "",
+      "flag_condition": "",
+      "primary_theory": "TA_001",
+      "secondary_theory": "EI_001",
+      "priority": "1",
+      "rationale_th": "Q4 กับ Manager Critical Parent — TA ช่วยสื่อสาร Adult, EI ช่วยไม่ reactive",
+      "contraindication": ""
+    },
+    {
+      "rule_id": "R017",
+      "situation_type": "personal_growth",
+      "demm_condition_1": "via_dominant=Tr AND rain_flag=",
+      "demm_condition_2": "score_n >= 3.5",
+      "flag_condition": "Rain",
+      "primary_theory": "AC_001",
+      "secondary_theory": "SD_001",
+      "priority": "1",
+      "rationale_th": "VIA=Transcendence + Rain — ผู้ที่แสวงหาความหมายมักตอบสนอง ACT ได้ดี",
+      "contraindication": ""
+    }
+  ],
   "wellbeing_patterns": [
     {
       "pattern_id": "P001",
@@ -508,7 +819,148 @@
       "phase4": "Academic Validation + n=500 + Publication (ปีที่ 2)"
     }
   },
-  "toxic_workplace_dimensions": [],
+  "toxic_workplace_dimensions": [
+    {
+      "pattern_id": "TP001",
+      "pattern_name": "Credit Stealing",
+      "pattern_th": "ขโมยผลงาน",
+      "type": "A",
+      "description": "นำงาน/ไอเดียของคนอื่นไปนำเสนอเป็นของตัวเอง โดยไม่ให้เครดิต",
+      "signs_in_chat": "พูดว่า 'งานผม/หนู' ทั้งที่ไม่ได้ทำ | ไม่กล่าวถึงผู้ทำงานจริง | เมื่อถามตอบไม่ได้",
+      "demm_of_perpetrator": "Q1-TJ สูง | O ต่ำ+E สูง+A ต่ำ | ต้องการ recognition สูงแต่ทำงานน้อย",
+      "demm_trigger_victim": "Q4/Q2 ที่ชอบทำงานหัว ไม่ชอบ present | A สูง (ไม่กล้าเรียกร้อง)",
+      "strategy": "Visibility Building: สร้างหลักฐานการทำงาน | Document trail | CC ผู้เกี่ยวข้อง | Present งานตัวเองก่อนส่ง",
+      "scripts_th": "สคริปต์: 'ขอบคุณที่ present แทนนะครับ ผมขอเสริมรายละเอียดที่ผมทำในส่วน X ครับ' | Email: 'ตามที่ผมส่งให้ทีมเมื่อ [วันที่]...'",
+      "escalation_point": "ถ้าเกิด > 3 ครั้ง → เริ่ม document อย่างเป็นทางการ | ถ้าผ่าน 2 เดือนไม่หยุด → แจ้ง HR",
+      "element_link": "ไฟ+ทอง — แย่งพลังงาน/เครดิตจากคนอื่น"
+    },
+    {
+      "pattern_id": "TP002",
+      "pattern_name": "Gaslighting",
+      "pattern_th": "บิดเบือนความจริง",
+      "type": "A",
+      "description": "ทำให้เหยื่อสงสัยความจำ/การรับรู้ตัวเอง เช่น 'ฉันไม่เคยพูดแบบนั้น' ทั้งที่พูด",
+      "signs_in_chat": "บอกว่าจำผิด | พูดว่า 'คุณ sensitive เกินไป' | เปลี่ยนเรื่องทุกครั้งที่ถูกตั้งคำถาม | ทำให้รู้สึกบ้า",
+      "demm_of_perpetrator": "Delusion + หรือ A ต่ำมาก+N สูง | ต้องการ control | มักมี Charm ต่อ upper management",
+      "demm_trigger_victim": "N สูง+A สูง (เชื่อคนง่าย) | ใหม่ในงาน | ขาดความมั่นใจ",
+      "strategy": "Grey Rock: ให้ข้อมูลน้อย ไม่ emotional | Document ทุกอย่าง (screenshot/email) | หา witness | อย่า argue — จะแพ้เสมอ",
+      "scripts_th": "Grey Rock script: ตอบสั้นๆ ว่า 'โอเคครับ' แล้วไปทำ document แทน | 'ขอให้ส่งเป็น email ได้ไหมครับ เพื่อความชัดเจน'",
+      "escalation_point": "Gaslighting คือ Abuse — ถ้าเกิดบ่อย → ปรึกษา HR หรือออก | อย่า normalize",
+      "element_link": "น้ำ (บิดเบือน ขุ่นมัว มองไม่ทะลุ)"
+    },
+    {
+      "pattern_id": "TP003",
+      "pattern_name": "Scapegoating",
+      "pattern_th": "หาแพะรับบาป",
+      "type": "A/C",
+      "description": "โยนความผิดให้คนใดคนหนึ่งสม่ำเสมอ แม้จะไม่ใช่ความผิดของเขา เพื่อปกป้องตัวเอง",
+      "signs_in_chat": "ชื่อคุณถูกพูดถึงทุกครั้งที่มีปัญหา | ถูก single out ในที่ประชุม | คนอื่นไม่ถูกลงโทษเรื่องเดียวกัน",
+      "demm_of_perpetrator": "Q4-TJ หรือ Q1-TJ ที่ Burned out | A ต่ำ+N สูง | กลัวความรับผิดชอบ",
+      "demm_trigger_victim": "Q2/Q4 ที่ไม่ชอบ confront | ใหม่ในทีม | E ต่ำ (ไม่มี ally)",
+      "strategy": "Build Allies ก่อน: หาคนในทีมที่เป็นกลาง | Factual defense เสมอ (ไม่ emotional) | 'ข้อมูลที่มีคือ...' | สร้าง documentation",
+      "scripts_th": "'ขอดู timeline ของปัญหาครับ เพราะส่วนที่ผมรับผิดชอบคือ [X] และส่งไปแล้วเมื่อ [วันที่]' | อย่าขอโทษถ้าไม่ได้ผิด",
+      "escalation_point": "ถ้าเป็น pattern > 1 เดือน → เริ่ม formal documentation | ถ้า HR ไม่ช่วย → พิจารณาออก",
+      "element_link": "ไฟ (เผาคนอื่นแทนตัวเอง)"
+    },
+    {
+      "pattern_id": "TP004",
+      "pattern_name": "Micromanagement",
+      "pattern_th": "จุกจิกควบคุมทุกอย่าง",
+      "type": "B/C",
+      "description": "ควบคุมทุกรายละเอียด ไม่ไว้วางใจ ต้องรายงานทุกขั้นตอน ทำให้ทำงานไม่ได้",
+      "signs_in_chat": "ถามสถานะงานทุกชั่วโมง | เปลี่ยนงานที่ทำเสร็จแล้วโดยไม่มีเหตุผล | ต้อง approve ทุกอย่าง",
+      "demm_of_perpetrator": "Q4-TJ+C สูงมาก | Anxiety สูง | กลัวสูญเสียการควบคุม | มักเป็น Type C (stressed)",
+      "demm_trigger_victim": "Q4-FP ที่ต้องการ autonomy | O สูง ชอบทดลอง | ทำงาน creative",
+      "strategy": "Feed the need: Update บ่อยขึ้นเอง เพื่อลดความวิตก | ให้ข้อมูลก่อนถูกถาม | ทำให้เขารู้สึก in control โดยไม่ต้อง control จริง",
+      "scripts_th": "'ผมจะส่ง update ทุกเช้า 9 โมงนะครับ ถ้ามีอะไรเพิ่มเติมนอกนั้นจะแจ้งทันที' | 'ขอทำแบบ X ก่อนนะครับ ถ้าไม่โอเคค่อยปรับ'",
+      "escalation_point": "ถ้าทำ Feed the need แล้ว 30 วันไม่ดีขึ้น → อาจเป็น Type A ที่ต้องการ dominate ไม่ใช่แค่ anxious",
+      "element_link": "ดิน+ไฟ (ควบคุมเกิน ไม่ปล่อยให้ไหล)"
+    },
+    {
+      "pattern_id": "TP005",
+      "pattern_name": "Passive Aggression",
+      "pattern_th": "ก้าวร้าวเชิงรับ",
+      "type": "B/C",
+      "description": "แสดงความไม่พอใจแบบอ้อมๆ เช่น เงียบ ประชดประชัน ทำงานช้าลง แต่ไม่พูดตรงๆ",
+      "signs_in_chat": "ตอบ 'โอเค' แต่ไม่ทำ | ส่งงานช้าโดยไม่แจ้ง | ประชดในที่ประชุม | ให้ silent treatment",
+      "demm_of_perpetrator": "Q3/Q4-FP ที่ N สูง | ไม่กล้า confront ตรงๆ | A สูงเกิน (กลัวขัดแย้ง)",
+      "demm_trigger_victim": "Q4-TJ ที่ไม่เข้าใจ F mode | คนที่ direct เกิน",
+      "strategy": "Name it gently: 'สังเกตว่าดูเงียบกว่าปกติ มีอะไรที่อยากพูดถึงไหม?' | ไม่ force | สร้าง safe space ให้พูด",
+      "scripts_th": "'ผมอยากให้งานออกมาดี ถ้ามีส่วนไหนที่ผมทำให้ไม่สะดวกบอกได้นะครับ' | อย่า accuse ว่า passive aggressive",
+      "escalation_point": "ถ้าทำงานร่วมกันไม่ได้ชัดเจน → แยก responsibility ให้ชัด ลด dependency",
+      "element_link": "น้ำ+ลม (ไหลหลีกเลี่ยง ไม่เผชิญตรงๆ)"
+    },
+    {
+      "pattern_id": "TP006",
+      "pattern_name": "Public Humiliation",
+      "pattern_th": "ประจาน/ดูถูกต่อหน้าคน",
+      "type": "A",
+      "description": "วิจารณ์ ดูถูก หรือประจานในที่ประชุมหรือต่อหน้าคนอื่น โดยไม่จำเป็น",
+      "signs_in_chat": "วิจารณ์งานในที่ประชุมโดยไม่แจ้งก่อน | เปรียบเทียบกับคนอื่นต่อหน้า | สีหน้าดูถูกต่อหน้าทีม",
+      "demm_of_perpetrator": "Q1-TJ+A ต่ำมาก | Contempt สูง (Gottman) | อาจมี Narcissistic traits",
+      "demm_trigger_victim": "E ต่ำ+N สูง (ตกใจง่าย) | Q2/Q4 ที่ไม่ชอบ spotlight",
+      "strategy": "Anchoring: ตั้งสติก่อน ('โอเคครับ ขอโน้ตไว้') → คุยแบบ 1:1 ทีหลัง | ไม่แก้ตัวในที่ประชุม เพราะจะแพ้เสมอ",
+      "scripts_th": "ในที่ประชุม: 'รับทราบครับ ขอนัดคุยเพิ่มเติมได้ไหมครับ' | หลังประชุม: 'อยากเข้าใจ feedback ที่ให้ให้ชัดขึ้นครับ'",
+      "escalation_point": "ถ้าเกิน 3 ครั้ง = Hostile Work Environment → เริ่ม formal complaint",
+      "element_link": "ไฟ (ทำลาย เผา ดูถูก)"
+    },
+    {
+      "pattern_id": "TP007",
+      "pattern_name": "Exclusion & Isolation",
+      "pattern_th": "กีดกันและแยกออก",
+      "type": "A/B",
+      "description": "ไม่เชิญเข้าประชุม ไม่แชร์ข้อมูล ตัดออกจาก loop จนทำงานไม่ได้หรือรู้สึกโดดเดี่ยว",
+      "signs_in_chat": "ไม่ได้รับ invite ประชุมที่เกี่ยวข้อง | ได้รับข้อมูลช้ากว่าคนอื่น | คนอื่นรู้เรื่องที่คุณไม่รู้",
+      "demm_of_perpetrator": "Q3 Manager ที่ form clique | A ต่ำ+E สูง (เลือกคนเข้ากลุ่ม)",
+      "demm_trigger_victim": "Q2/Q4+E ต่ำ (ไม่ได้เข้าสังคมเอง จึงถูกมองข้าม)",
+      "strategy": "Proactive Visibility: เข้าร่วมเอง ถามตรงๆ ว่าต้องการข้อมูลอะไร | Build relationships กับ stakeholders โดยตรง",
+      "scripts_th": "'อยากให้ CC ผมในเรื่อง X ด้วยได้ไหมครับ เพราะกระทบงานที่รับผิดชอบ' | หา Internal sponsor ที่ไว้ใจ",
+      "escalation_point": "ถ้าเจตนา isolate ชัดเจน → อาจเป็น constructive dismissal → ปรึกษาทางกฎหมายแรงงาน",
+      "element_link": "น้ำ+ดิน (กั้น ปิดกัน ไม่ให้ไหลผ่าน)"
+    },
+    {
+      "pattern_id": "TP008",
+      "pattern_name": "Favoritism",
+      "pattern_th": "เล่นพรรคเล่นพวก",
+      "type": "B/C",
+      "description": "ให้สิทธิพิเศษ โอกาส หรือ protection กับคนบางกลุ่ม ทำให้คนอื่นรู้สึกไม่เป็นธรรม",
+      "signs_in_chat": "คนโปรดได้งานดีเสมอ | กฎใช้ไม่เท่ากัน | ความผิดเดียวกันถูกลงโทษต่างกัน",
+      "demm_of_perpetrator": "Q3-FJ+VIA-H (loyalty สูง) | สร้าง inner circle | มักไม่ตั้งใจเป็น Type A",
+      "demm_trigger_victim": "Q4-TJ+VIA-J (ยุติธรรม) รู้สึกแย่มากกับเรื่อง unfair",
+      "strategy": "Focus on Performance: ทำงานดีจนปฏิเสธไม่ได้ | สร้างความสัมพันธ์กับ boss แบบ professional | อย่าเปรียบตัวเองกับ favorite",
+      "scripts_th": "'ขอให้ประเมินงานผมบน criteria เดียวกับทีมได้ไหมครับ' | Document ความแตกต่างที่ชัดเจน",
+      "escalation_point": "ถ้า Favoritism ทำให้ไม่ได้รับโอกาสที่ merit-based → แจ้ง HR พร้อม evidence",
+      "element_link": "ดิน (ความมั่นคงที่ไม่เป็นธรรม)"
+    },
+    {
+      "pattern_id": "TP009",
+      "pattern_name": "Overloading",
+      "pattern_th": "โหลดงานเกินจริง",
+      "type": "B/C",
+      "description": "มอบหมายงานมากเกินจนทำไม่ทัน ทั้งที่รู้ว่าเกินกำลัง อาจตั้งใจหรือไม่ก็ได้",
+      "signs_in_chat": "งานใหม่มาก่อนงานเก่าเสร็จ | ไม่มี resource ให้แต่มี deadline | คนอื่นได้งานน้อยกว่า",
+      "demm_of_perpetrator": "Q4-TJ Manager+Burnout (โหลดงานตัวเองเยอะก็โหลดคนอื่นเยอะ) | หรือ Q1 ที่ underestimate effort",
+      "demm_trigger_victim": "Q4-TJ+VIA-T (ควบคุมตน) รับงานทุกอย่างก่อนแล้วค่อย crash",
+      "strategy": "Scope Management: ให้ priority list ทุกครั้งที่รับงานใหม่ | Trade-off conversation | 'ถ้ารับงาน X งาน Y จะช้าลง — เลือกอันไหนก่อนครับ?'",
+      "scripts_th": "'ตอนนี้มี A B C อยู่ครับ ถ้าเพิ่ม D มาด้วย อยากให้ช่วย prioritize ว่างานไหนสำคัญกว่ากัน' | ไม่พูดว่า 'ทำไม่ได้' แต่พูดว่า 'trade-off คือ...'",
+      "escalation_point": "ถ้า overload เป็น pattern > 2 เดือน → เป็น structural problem → คุยระดับ department",
+      "element_link": "ไฟ+ดิน (แบกหนักเกิน รากฐานพัง)"
+    },
+    {
+      "pattern_id": "TP010",
+      "pattern_name": "Undermining",
+      "pattern_th": "ขัดขวางความก้าวหน้า",
+      "type": "A",
+      "description": "แอบขัดขวาง ลดคุณค่า หรือทำลาย reputation ของคนอื่นอย่างเงียบๆ",
+      "signs_in_chat": "ข่าวลือเชิงลบเกี่ยวกับคุณถึง boss | ถูก left out จาก opportunities โดยไม่มีเหตุผล | งานดีแต่ไม่ได้รับการยอมรับ",
+      "demm_of_perpetrator": "Q1-TJ+A ต่ำมาก | Competitive สูง | รู้สึกถูกคุกคามโดยคนที่ดีกว่า",
+      "demm_trigger_victim": "Q2/Q4 ที่ไม่ promote ตัวเอง | BRIGHT Type (คนอาจกลัวศักยภาพ)",
+      "strategy": "Build Reputation โดยตรงกับ Stakeholders: อย่าผ่าน underminer | สร้าง track record ที่ชัดเจน | หา Sponsor ระดับสูง",
+      "scripts_th": "ไม่ confront โดยตรง — ทำงานดีจนหลักฐานพูดแทน | หา ally ที่พูดดีเกี่ยวกับคุณใน circle สำคัญ",
+      "escalation_point": "ถ้า Undermining เป็นระบบ → exit เป็นตัวเลือกที่ดีกว่า fight",
+      "element_link": "ดิน+น้ำ (บ่อนทำลายรากฐานเงียบๆ)"
+    }
+  ],
   "toxic_scoring_rules": [],
   "toxic_rules_json": {
     "version": "1.0",
@@ -698,5 +1150,47 @@
       "physical_threat": "แนะนำติดต่อ HR ด่วน + สายด่วน 1323 + กฎหมายแรงงาน",
       "has_crisis": "1323 ทันที ไม่มีข้อยกเว้น"
     }
-  }
+  },
+  "toxic_questions": [
+    {
+      "Q_ID": "AQ1",
+      "Question_TH": "พฤติกรรมที่รู้สึกว่ามีปัญหา เกิดบ่อยแค่ไหน?",
+      "ChoiceA": "ทุกวันหรือเกือบทุกวัน",
+      "ChoiceB": "เฉพาะตอนกดดัน/stressed",
+      "ChoiceC": "บางครั้งไม่มีรูปแบบ",
+      "ChoiceD": "เพิ่งเริ่มเกิดขึ้นช่วงนี้"
+    },
+    {
+      "Q_ID": "AQ2",
+      "Question_TH": "เคยพูดคุยกับเขาตรงๆ เรื่องนี้ไหม? ถ้าเคย เขาตอบสนองอย่างไร?",
+      "ChoiceA": "ยอมรับและปรับปรุง",
+      "ChoiceB": "แก้ตัว/โยนความผิดกลับ",
+      "ChoiceC": "โกรธหรือปฏิเสธ",
+      "ChoiceD": "ยังไม่เคยกล้าคุย"
+    },
+    {
+      "Q_ID": "AQ3",
+      "Question_TH": "พฤติกรรมนี้เกิดกับคุณคนเดียว หรือกับคนอื่นด้วย?",
+      "ChoiceA": "เฉพาะฉันคนเดียว",
+      "ChoiceB": "กับหลายคนในทีม",
+      "ChoiceC": "กับทุกคน",
+      "ChoiceD": "ไม่แน่ใจ"
+    },
+    {
+      "Q_ID": "AQ4",
+      "Question_TH": "คุณรู้สึกอย่างไรกับตัวเองในช่วงนี้?",
+      "ChoiceA": "เหนื่อยแต่ยังมั่นใจตัวเอง",
+      "ChoiceB": "เริ่มสงสัยว่าตัวเองผิดหรือเปล่า",
+      "ChoiceC": "รู้สึกว่าตัวเองไร้ค่า",
+      "ChoiceD": "กลัวไปทำงานทุกวัน"
+    },
+    {
+      "Q_ID": "AQ5",
+      "Question_TH": "ถ้าต้องอธิบาย 'ผลลัพธ์ที่อยากได้' จากการพูดคุยครั้งนี้ คือ?",
+      "ChoiceA": "อยากได้วิธีทนและอยู่ต่อ",
+      "ChoiceB": "อยากเข้าใจว่าเขาทำไมถึงเป็นแบบนี้",
+      "ChoiceC": "อยากรู้ว่าควรออกดีไหม",
+      "ChoiceD": "อยากได้วิธีเปลี่ยนเขา"
+    }
+  ]
 }
