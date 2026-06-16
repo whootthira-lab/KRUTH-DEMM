@@ -1480,7 +1480,7 @@ export default function AdminGroupsPage() {
                                           <strong>ไอเทม:</strong> {buildRec.items.join(', ')}
                                         </div>
                                         <div className="text-[9px] text-slate-400 leading-tight">
-                                          <strong>สกิล:</strong> {buildRec.skills.join(', ')} | <strong>แท็ก:</strong> {buildRec.tags.join(', ')}
+                                          <strong>สกิล:</strong> {buildRec.skills.join(', ')} | <strong>รูน:</strong> {buildRec.runes?.join(', ') || 'ไม่มีแนะนำ'} | <strong>แท็ก:</strong> {buildRec.tags.join(', ')}
                                         </div>
                                       </div>
                                     )}

@@ -704,14 +704,14 @@ export function calcRoVMatchCapability(
 ): {
   capability: number;
   counterIndex: number;
-  buildRecommendations?: Record<string, { buildName: string; items: string[]; tags: string[]; skills: string[] }>;
+  buildRecommendations?: Record<string, { buildName: string; items: string[]; tags: string[]; skills: string[]; runes: string[] }>;
   rreAlerts?: string[];
   crsiAlerts?: string[];
 } {
   let counterIndex = 0.50; // default neutral
   const rreAlerts: string[] = [];
   const crsiAlerts: string[] = [];
-  const buildRecommendations: Record<string, { buildName: string; items: string[]; tags: string[]; skills: string[] }> = {};
+  const buildRecommendations: Record<string, { buildName: string; items: string[]; tags: string[]; skills: string[]; runes: string[] }> = {};
 
   if (selectedHeroes && opponentHeroes && opponentHeroes.length > 0) {
     const activeOpponents = opponentHeroes.filter((h): h is RoVHero => !!h);
@@ -749,7 +749,10 @@ export function calcRoVMatchCapability(
       const hero = selectedHeroes[m.user_id];
       if (!hero) return;
 
-      if (hero.primary_role === 'Marksman') {
+      const role = hero.primary_role; // 'Assassin', 'Mage', 'Fighter', 'Marksman', 'Tank', 'Support'
+      const isAggressive = (m.quadrant_primary === 'Q1' || m.quadrant_primary === 'Q4' || (m.score_e ?? 3.0) > 3.5);
+
+      if (role === 'Marksman') {
         const rre = calcPredictedResourceGreed(m);
         const hasGreedTag = hero.tactical_tags?.includes('resource_greed') || hero.tactical_tags?.includes('late_scaling');
         if (hasGreedTag && rre >= 1.5) {
@@ -757,7 +760,7 @@ export function calcRoVMatchCapability(
         }
       }
 
-      if (hero.primary_role === 'Tank' || hero.primary_role === 'Support') {
+      if (role === 'Tank' || role === 'Support') {
         const crsi = calcPredictedResourceSharing(m);
         const hasProtectTag = hero.tactical_tags?.includes('backline_protector') || hero.tactical_tags?.includes('peel_expert');
         if (hasProtectTag && crsi >= 1.4) {
@@ -765,30 +768,150 @@ export function calcRoVMatchCapability(
         }
       }
 
-      let buildName = 'Semi-Fighter / Bruiser';
-      let items = ['Sonic Greaves', 'Spear of Longinus', 'Omni Arms', 'Shield of Lost', 'Fenrir\'s Tooth'];
-      let skills = ['Flicker', 'Purify'];
-      let tags = ['SAFE_PLAY_BRUISER'];
-
-      const isQ1TP = m.quadrant_primary === 'Q1' && m.jungian_type?.includes('TP');
-      if (isQ1TP) {
-        buildName = 'Full Damage / Assassin';
-        items = ['Gilded Greaves', 'Omni Arms', 'Fenrir\'s Tooth', 'Muramasa', 'Blade of Eternity'];
-        skills = ['Flicker', 'Execute'];
-        tags = ['HIGH_RISK_FULL_DAMAGE'];
+      // 3.1 Determine Runes (Red, Purple, Green)
+      let runes: string[] = [];
+      if (role === 'Mage') {
+        runes = ['Violate', 'Spirit', 'Flurry'];
+      } else if (role === 'Tank' || role === 'Support') {
+        runes = ['Awakened', 'Protect', 'Valiancy'];
+      } else if (role === 'Marksman') {
+        runes = ['Rampage', 'Guerrilla', 'Dragon\'s Claw'];
+      } else {
+        // Fighter / Assassin
+        if (isAggressive) {
+          runes = ['Onslaught', 'Assassinate', 'Dragon\'s Claw'];
+        } else {
+          runes = ['Onslaught', 'Protect', 'Skewer'];
+        }
       }
 
+      // 3.2 Determine Challenger Skills
+      let skills: string[] = [];
+      if (role === 'Assassin') {
+        skills = ['Punish', 'Flicker'];
+      } else if (role === 'Marksman') {
+        skills = oppHasHardCC ? ['Flicker', 'Purify'] : ['Flicker', 'Sprint'];
+      } else if (role === 'Mage') {
+        skills = oppHasHardCC ? ['Flicker', 'Purify'] : ['Flicker', 'Heal'];
+      } else if (role === 'Tank' || role === 'Support') {
+        skills = oppHasHardCC ? ['Purify', 'Heal'] : ['Heal', 'Disrupt'];
+      } else {
+        // Fighter
+        skills = oppHasHardCC ? ['Flicker', 'Purify'] : ['Flicker', 'Execute'];
+      }
+
+      // 3.3 Determine Build Name, Items, and Tags
+      let buildName = 'Semi-Fighter / Bruiser';
+      let items: string[] = [];
+      let tags: string[] = ['SAFE_PLAY_BRUISER'];
+
+      const isShoesSpecial = oppHasHardCC;
+
+      if (role === 'Marksman') {
+        if (isAggressive) {
+          buildName = 'Full Damage / Critical Carry';
+          items = [
+            isShoesSpecial ? 'Gilded Greaves' : 'Sonic Greaves',
+            'Claves Sancti',
+            'Slikk\'s Sting',
+            'Omni Arms',
+            'Fenrir\'s Tooth'
+          ];
+          tags = ['HIGH_RISK_FULL_DAMAGE'];
+        } else {
+          buildName = 'Safe / Bruiser Carry';
+          items = [
+            isShoesSpecial ? 'Gilded Greaves' : 'Sonic Greaves',
+            'Spear of Longinus',
+            'Claves Sancti',
+            'Shield of the Lost',
+            'Blade of Eternity'
+          ];
+          tags = ['SAFE_PLAY_BRUISER'];
+        }
+      } else if (role === 'Mage') {
+        if (isAggressive) {
+          buildName = 'Full Magic Burst';
+          items = ['Gilded Greaves', 'Boomstick', 'Hecate\'s Diadem', 'Staff of Nuul', 'Blade of Eternity'];
+          tags = ['HIGH_RISK_FULL_DAMAGE'];
+        } else {
+          buildName = 'Sustain Magic Bruiser';
+          items = ['Gilded Greaves', 'Rhea\'s Blessing', 'Boomstick', 'Staff of Nuul', 'Medallion of Troy'];
+          tags = ['SAFE_PLAY_BRUISER'];
+        }
+      } else if (role === 'Tank' || role === 'Support') {
+        if (role === 'Support') {
+          buildName = 'Team Aura Support';
+          items = ['Genesis', 'Gilded Greaves', 'The Aegis', 'Shield of the Lost', 'Gaia\'s Standard'];
+          tags = ['ALL_PROFILES'];
+        } else {
+          buildName = 'Full Crowd Control Tank';
+          items = [
+            isShoesSpecial ? 'Gilded Greaves' : 'Sonic Greaves',
+            'The Aegis',
+            'Shield of the Lost',
+            'Gaia\'s Standard',
+            'Blade of Eternity'
+          ];
+          tags = ['SAFE_PLAY_BRUISER'];
+        }
+      } else if (role === 'Assassin') {
+        if (isAggressive) {
+          buildName = 'Full Damage Assassin';
+          items = ['Soulriever', 'Rankbreaker', 'Omni Arms', 'Fenrir\'s Tooth', 'Blade of Eternity'];
+          tags = ['HIGH_RISK_FULL_DAMAGE'];
+        } else {
+          buildName = 'Semi-Tank Jungler';
+          items = ['Leviathan', 'Spear of Longinus', 'Omni Arms', 'Shield of the Lost', 'Blade of Eternity'];
+          tags = ['SAFE_PLAY_BRUISER'];
+        }
+      } else {
+        // Fighter
+        if (isAggressive) {
+          buildName = 'Aggressive Fighter';
+          items = [
+            isShoesSpecial ? 'Gilded Greaves' : 'Sonic Greaves',
+            'Spear of Longinus',
+            'Omni Arms',
+            'Rankbreaker',
+            'Blade of Eternity'
+          ];
+          tags = ['HIGH_RISK_FULL_DAMAGE'];
+        } else {
+          buildName = 'Semi-Fighter / Bruiser';
+          items = [
+            isShoesSpecial ? 'Gilded Greaves' : 'Sonic Greaves',
+            'Spear of Longinus',
+            'Omni Arms',
+            'Shield of the Lost',
+            'Fenrir\'s Tooth'
+          ];
+          tags = ['SAFE_PLAY_BRUISER'];
+        }
+      }
+
+      // 3.4 State Dynamic Override
       const tiltVal = (m.delta_tilt?.anger || 0.0) + (m.delta_tilt?.aggression || 0.0);
       const isHighRiskHero = hero.tactical_tags?.includes('backline_diver') || hero.tactical_tags?.includes('high_risk');
 
-      if (tiltVal >= 3.5 && isHighRiskHero && buildName === 'Full Damage / Assassin') {
-        buildName = 'Semi-Fighter / Bruiser (State Override)';
-        items = ['Sonic Greaves', 'Spear of Longinus', 'Omni Arms', 'Shield of Lost', 'Blade of Eternity'];
-        skills = ['Flicker', 'Purify'];
+      if (tiltVal >= 3.5 && isHighRiskHero && tags.includes('HIGH_RISK_FULL_DAMAGE')) {
+        buildName = `${buildName} (State Override)`;
         tags = ['SAFE_PLAY_BRUISER', 'SURVIVAL_CUSHION'];
+        
+        // Convert to defensive setup
+        if (role === 'Marksman') {
+          items = ['Gilded Greaves', 'Spear of Longinus', 'Claves Sancti', 'Shield of the Lost', 'Blade of Eternity'];
+        } else if (role === 'Assassin') {
+          items = ['Leviathan', 'Spear of Longinus', 'Omni Arms', 'Shield of the Lost', 'Blade of Eternity'];
+        } else if (role === 'Mage') {
+          items = ['Gilded Greaves', 'Rhea\'s Blessing', 'Boomstick', 'Staff of Nuul', 'Medallion of Troy'];
+        } else if (role === 'Fighter') {
+          items = ['Sonic Greaves', 'Spear of Longinus', 'Omni Arms', 'Shield of the Lost', 'Blade of Eternity'];
+        }
+        skills = ['Flicker', 'Purify'];
       }
 
-      buildRecommendations[m.user_id] = { buildName, items, tags, skills };
+      buildRecommendations[m.user_id] = { buildName, items, tags, skills, runes };
     });
 
   } else if (opponentData) {
