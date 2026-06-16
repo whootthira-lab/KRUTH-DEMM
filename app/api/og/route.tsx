@@ -4,6 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'edge';
 
+// Cache font buffer in global memory to optimize subsequent warm-start requests
+let cachedFontData: ArrayBuffer | null = null;
+
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id');
   const mode = req.nextUrl.searchParams.get('mode'); // 'download' สำหรับรูปแนวตั้ง
@@ -50,8 +53,10 @@ export async function GET(req: NextRequest) {
   const height = isDownload ? 1400 : 630;
 
   // โหลดฟอนต์ภาษาไทยจาก CDN 
-  const fontUrl = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansThai/NotoSansThai-Medium.ttf';
-  const fontData = await fetch(new URL(fontUrl)).then((res) => res.arrayBuffer());
+  if (!cachedFontData) {
+    const fontUrl = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansThai/NotoSansThai-Medium.ttf';
+    cachedFontData = await fetch(new URL(fontUrl)).then((res) => res.arrayBuffer());
+  }
 
   return new ImageResponse(
     (
@@ -188,7 +193,7 @@ export async function GET(req: NextRequest) {
     { 
       width, 
       height,
-      fonts: [{ name: 'NotoSansThai', data: fontData, style: 'normal' }]
+      fonts: [{ name: 'NotoSansThai', data: cachedFontData!, style: 'normal' }]
     }
   );
 }

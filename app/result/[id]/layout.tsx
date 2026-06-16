@@ -1,13 +1,18 @@
 import type { Metadata } from 'next';
 import { createClient } from '@supabase/supabase-js';
 
+import { headers } from 'next/headers';
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://kruth-demm-final.vercel.app';
+  const headersList = headers();
+  const host = headersList.get('host');
+  const proto = headersList.get('x-forwarded-proto') || 'https';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || (host ? `${proto}://${host}` : 'https://kruthdemm.vercel.app');
 
   const { data: result } = await supabase
     .from('results').select('archetype_id, archetype_name_th, archetype_name_en')
