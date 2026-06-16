@@ -667,15 +667,131 @@ export function calcTeamSynergy(members: SimProfile[], projectType: string): { s
 }
 
 // 6. Esports RoV Match Engine
+export interface RoVHero {
+  id: string;
+  hero_name_th: string;
+  hero_name_en: string;
+  primary_role: string;
+  element_seed: Record<string, number>;
+  tactical_tags: string[];
+  base_archetype?: string | null;
+}
+
+export function calcPredictedResourceGreed(m: SimProfile): number {
+  const o = m.score_o ?? 3.0;
+  const a = m.score_a ?? 3.0;
+  const c = m.score_c ?? 3.0;
+  const greed = (o + (5 - a) + (5 - c)) / 3.0;
+  return parseFloat(greed.toFixed(2));
+}
+
+export function calcPredictedResourceSharing(m: SimProfile): number {
+  const a = m.score_a ?? 3.0;
+  const c = m.score_c ?? 3.0;
+  const e = m.score_e ?? 3.0;
+  const conn = m.kwi?.connection ?? 3.0;
+  const sharing = (a + c + e + conn) / 4.0;
+  return parseFloat(sharing.toFixed(2));
+}
+
 export function calcRoVMatchCapability(
   teamSynergy: number,
   comeback: number,
   opponentData: { element_fire_pct: number; aggression: number } | null,
-  teamMembers: SimProfile[]
-): { capability: number; counterIndex: number } {
+  teamMembers: SimProfile[],
+  selectedHeroes?: Record<string, RoVHero | null>,
+  opponentHeroes?: (RoVHero | null)[]
+): {
+  capability: number;
+  counterIndex: number;
+  buildRecommendations?: Record<string, { buildName: string; items: string[]; tags: string[]; skills: string[] }>;
+  rreAlerts?: string[];
+  crsiAlerts?: string[];
+} {
   let counterIndex = 0.50; // default neutral
+  const rreAlerts: string[] = [];
+  const crsiAlerts: string[] = [];
+  const buildRecommendations: Record<string, { buildName: string; items: string[]; tags: string[]; skills: string[] }> = {};
 
-  if (opponentData) {
+  if (selectedHeroes && opponentHeroes && opponentHeroes.length > 0) {
+    const activeOpponents = opponentHeroes.filter((h): h is RoVHero => !!h);
+    const activePicks = Object.values(selectedHeroes).filter((h): h is RoVHero => !!h);
+
+    // 1. Anti-Snowball Circuit
+    const oppHasSnowball = activeOpponents.some(h => 
+      h.tactical_tags?.includes('early_snowball') || h.tactical_tags?.includes('jungle_invader')
+    );
+    const ourHasTJ = teamMembers.some(m => {
+      const hero = selectedHeroes[m.user_id];
+      return hero && m.jungian_type?.includes('TJ');
+    });
+
+    if (oppHasSnowball && ourHasTJ) {
+      counterIndex += 0.25;
+    }
+
+    // 2. Anti-Control Matchup
+    const oppHasHardCC = activeOpponents.some(h => 
+      h.tactical_tags?.includes('hard_cc')
+    );
+    const ourHasAntiControl = activePicks.some(h => 
+      h.tactical_tags?.includes('anti_control') || h.tactical_tags?.includes('cc_purify_ultimate')
+    );
+
+    if (oppHasHardCC && ourHasAntiControl) {
+      counterIndex += 0.25;
+    }
+
+    counterIndex = Math.max(0.15, Math.min(0.98, counterIndex));
+
+    // 3. Dynamic Build Recommendation & RRE / Crsi checking
+    teamMembers.forEach(m => {
+      const hero = selectedHeroes[m.user_id];
+      if (!hero) return;
+
+      if (hero.primary_role === 'Marksman') {
+        const rre = calcPredictedResourceGreed(m);
+        const hasGreedTag = hero.tactical_tags?.includes('resource_greed') || hero.tactical_tags?.includes('late_scaling');
+        if (hasGreedTag && rre >= 1.5) {
+          rreAlerts.push(`${m.full_name} (${hero.hero_name_en}) มีระดับความละโมบทรัพยากรสูง (R_RE = ${rre.toFixed(1)}): ทีมโรมมิ่งควรคอยช่วยเหลือดูแลเลนลึก`);
+        }
+      }
+
+      if (hero.primary_role === 'Tank' || hero.primary_role === 'Support') {
+        const crsi = calcPredictedResourceSharing(m);
+        const hasProtectTag = hero.tactical_tags?.includes('backline_protector') || hero.tactical_tags?.includes('peel_expert');
+        if (hasProtectTag && crsi >= 1.4) {
+          crsiAlerts.push(`${m.full_name} (${hero.hero_name_en}) อุทิศตัวช่วยความอยู่รอดทีมสูงสุด (C_rsi = ${crsi.toFixed(1)}): ได้รับเสนอชื่อเป็น Facilitator / Morale Booster`);
+        }
+      }
+
+      let buildName = 'Semi-Fighter / Bruiser';
+      let items = ['Sonic Greaves', 'Spear of Longinus', 'Omni Arms', 'Shield of Lost', 'Fenrir\'s Tooth'];
+      let skills = ['Flicker', 'Purify'];
+      let tags = ['SAFE_PLAY_BRUISER'];
+
+      const isQ1TP = m.quadrant_primary === 'Q1' && m.jungian_type?.includes('TP');
+      if (isQ1TP) {
+        buildName = 'Full Damage / Assassin';
+        items = ['Gilded Greaves', 'Omni Arms', 'Fenrir\'s Tooth', 'Muramasa', 'Blade of Eternity'];
+        skills = ['Flicker', 'Execute'];
+        tags = ['HIGH_RISK_FULL_DAMAGE'];
+      }
+
+      const tiltVal = (m.delta_tilt?.anger || 0.0) + (m.delta_tilt?.aggression || 0.0);
+      const isHighRiskHero = hero.tactical_tags?.includes('backline_diver') || hero.tactical_tags?.includes('high_risk');
+
+      if (tiltVal >= 3.5 && isHighRiskHero && buildName === 'Full Damage / Assassin') {
+        buildName = 'Semi-Fighter / Bruiser (State Override)';
+        items = ['Sonic Greaves', 'Spear of Longinus', 'Omni Arms', 'Shield of Lost', 'Blade of Eternity'];
+        skills = ['Flicker', 'Purify'];
+        tags = ['SAFE_PLAY_BRUISER', 'SURVIVAL_CUSHION'];
+      }
+
+      buildRecommendations[m.user_id] = { buildName, items, tags, skills };
+    });
+
+  } else if (opponentData) {
     const isOpponentEarlySnowball = opponentData.element_fire_pct > 40 && opponentData.aggression > 3.0;
     if (isOpponentEarlySnowball) {
       let waterCount = 0;
@@ -693,7 +809,7 @@ export function calcRoVMatchCapability(
 
   const rawCap = 0.4 * teamSynergy + 0.3 * (comeback * 20) + 0.3 * (counterIndex * 100);
   const capability = Math.round(rawCap);
-  return { capability, counterIndex };
+  return { capability, counterIndex, buildRecommendations, rreAlerts, crsiAlerts };
 }
 
 // 7. Combat Sports individual Dominance

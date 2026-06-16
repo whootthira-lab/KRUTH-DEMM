@@ -149,6 +149,20 @@ export default function AdminGroupsPage() {
   const [oppNCombat, setOppNCombat] = useState<number>(3.0);
   const [selectedLeaderId, setSelectedLeaderId] = useState<string>('');
 
+  const [rovHeroes, setRovHeroes] = useState<any[]>([]);
+  const [selectedHeroIds, setSelectedHeroIds] = useState<Record<string, string>>({});
+  const [oppHeroIds, setOppHeroIds] = useState<string[]>(['', '', '', '', '']);
+
+  async function loadRovHeroes() {
+    try {
+      const { data, error } = await supabase.from('rov_knowledge_heroes').select('*').order('hero_name_en');
+      if (error) throw error;
+      setRovHeroes(data || []);
+    } catch (e: any) {
+      console.error('Error loading RoV heroes:', e.message);
+    }
+  }
+
   // Load organizations and check access on mount
   useEffect(() => {
     const email = localStorage.getItem('kruth_admin_email');
@@ -173,6 +187,7 @@ export default function AdminGroupsPage() {
     }
 
     loadOrgs();
+    loadRovHeroes();
   }, []);
 
   // Load members and sessions when selected organization changes
@@ -699,13 +714,22 @@ export default function AdminGroupsPage() {
       if (finalSynergy < 40) friction = 'RED';
       else if (finalSynergy < 60) friction = 'ORANGE';
       else if (finalSynergy < 75) friction = 'YELLOW';
-
+ 
       if (selectedProjectType === 'rov') {
+        const selectedHeroesMap: Record<string, any> = {};
+        simProfiles.forEach(m => {
+          const heroId = selectedHeroIds[m.user_id];
+          selectedHeroesMap[m.user_id] = rovHeroes.find(h => h.id === heroId) || null;
+        });
+        const opponentHeroesList = oppHeroIds.map(id => rovHeroes.find(h => h.id === id) || null);
+
         const rovRes = calcRoVMatchCapability(
           synergyRes.synergy,
           synergyRes.comeback,
           { element_fire_pct: oppFirePct, aggression: oppAggression },
-          simProfiles
+          simProfiles,
+          selectedHeroesMap,
+          opponentHeroesList
         );
         finalSynergy = rovRes.capability;
       } else if (selectedProjectType === 'combat') {
@@ -722,10 +746,17 @@ export default function AdminGroupsPage() {
           finalSynergy = combatRes.dominance;
         }
       }
-
+ 
       const userIds = peers.map(m => m.user_id);
       
-      const { error } = await supabase.from('group_simulations').insert({
+      const selectedHIds = selectedProjectType === 'rov'
+        ? userIds.map(uid => selectedHeroIds[uid]).filter(id => !!id)
+        : [];
+      const opponentHIds = selectedProjectType === 'rov'
+        ? oppHeroIds.filter(id => !!id)
+        : [];
+
+      const insertData: any = {
         org_id: selectedOrgId,
         leader_id: selectedLeaderId || peers[0]?.user_id || '',
         selected_user_ids: userIds,
@@ -733,8 +764,15 @@ export default function AdminGroupsPage() {
         calculated_synergy: finalSynergy,
         friction_risk_level: friction,
         bot_recommendation: `ประเภทโครงการ: ${selectedProjectType}, ระดับความประสานงานของทีม: ${finalSynergy}%, ศักยภาพหลัก: ${synergyRes.taskPotential.toFixed(2)}, Comeback Potential: ${synergyRes.comeback.toFixed(2)}`
-      });
+      };
 
+      if (selectedProjectType === 'rov') {
+        insertData.selected_hero_ids = selectedHIds;
+        insertData.opponent_hero_ids = opponentHIds;
+      }
+
+      const { error } = await supabase.from('group_simulations').insert(insertData);
+ 
       if (error) throw error;
       showMsg('บันทึกผลการจำลองกลุ่มสำเร็จแล้ว!', 'success');
       setAnalyzingGroupNo(null);
@@ -1027,11 +1065,20 @@ export default function AdminGroupsPage() {
           let combatDetails = null;
           
           if (selectedProjectType === 'rov') {
+            const selectedHeroesMap: Record<string, any> = {};
+            simProfiles.forEach(m => {
+              const heroId = selectedHeroIds[m.user_id];
+              selectedHeroesMap[m.user_id] = rovHeroes.find(h => h.id === heroId) || null;
+            });
+            const opponentHeroesList = oppHeroIds.map(id => rovHeroes.find(h => h.id === id) || null);
+
             const rovRes = calcRoVMatchCapability(
               synergyRes.synergy,
               synergyRes.comeback,
               { element_fire_pct: oppFirePct, aggression: oppAggression },
-              simProfiles
+              simProfiles,
+              selectedHeroesMap,
+              opponentHeroesList
             );
             displayScore = rovRes.capability;
             displayLabel = 'ขีดความสามารถ (Esports Capability)';
@@ -1159,7 +1206,55 @@ export default function AdminGroupsPage() {
                         </h4>
                         
                         <div className="space-y-3 text-xs">
-                          <div className="space-y-1.5">
+                          {/* Choose Heroes for our Team */}
+                          <div className="space-y-2">
+                            <label className="text-slate-300 font-semibold block">เลือกฮีโร่สำหรับสมาชิกในทีม (Your Team Heroes):</label>
+                            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                              {simProfiles.map(m => (
+                                <div key={m.user_id} className="flex justify-between items-center gap-2">
+                                  <span className="text-slate-400 font-medium truncate max-w-[120px]">{m.full_name}</span>
+                                  <select
+                                    value={selectedHeroIds[m.user_id] || ''}
+                                    onChange={e => {
+                                      setSelectedHeroIds(prev => ({ ...prev, [m.user_id]: e.target.value }));
+                                    }}
+                                    className="flex-1 max-w-[180px] border border-slate-700 bg-[#0f172a] rounded-lg p-1 text-xs text-slate-100 outline-none"
+                                  >
+                                    <option value="">-- เลือกฮีโร่ --</option>
+                                    {rovHeroes.map(h => (
+                                      <option key={h.id} value={h.id}>{h.hero_name_en} ({h.primary_role})</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Choose Heroes for Opponent Team */}
+                          <div className="space-y-2">
+                            <label className="text-slate-300 font-semibold block">เลือกฮีโร่ทีมตรงข้าม (Opponent Team - 5 ฮีโร่):</label>
+                            <div className="grid grid-cols-5 gap-1.5">
+                              {oppHeroIds.map((val, idx) => (
+                                <select
+                                  key={idx}
+                                  value={val}
+                                  onChange={e => {
+                                    const newOppHeroIds = [...oppHeroIds];
+                                    newOppHeroIds[idx] = e.target.value;
+                                    setOppHeroIds(newOppHeroIds);
+                                  }}
+                                  className="w-full border border-slate-700 bg-[#0f172a] rounded-lg p-1 text-[10px] text-slate-100 outline-none"
+                                >
+                                  <option value="">#{idx + 1}</option>
+                                  {rovHeroes.map(h => (
+                                    <option key={h.id} value={h.id}>{h.hero_name_en}</option>
+                                  ))}
+                                </select>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5 border-t border-slate-800 pt-2">
                             <div className="flex justify-between font-semibold">
                               <span className="text-slate-300">สัดส่วนธาตุไฟฝั่งตรงข้าม (Opponent Fire %):</span>
                               <span className="text-indigo-400">{oppFirePct}%</span>
@@ -1192,12 +1287,15 @@ export default function AdminGroupsPage() {
                         </div>
 
                         {rovDetails && (
-                          <div className="bg-indigo-950/20 p-3 rounded-xl border border-indigo-900/30 text-xs text-indigo-300/90 leading-relaxed">
-                            <strong>กลยุทธ์จำลอง:</strong> {
-                              rovDetails.counterIndex > 0.50
-                                ? '🔥 ตรวจพบแผน Early Snowball ของคู่ต่อสู้! โบนัส Tactical Counter ของทีมเปิดใช้งานสำเร็จ (+0.75)'
-                                : 'ทีมคู่แข่งไม่มีภัยคุกคาม Early Snowball หรือทีมเรายังขาดธาตุน้ำ/ประสานงานสำหรับต้านทานอย่างเหมาะสม'
-                            }
+                          <div className="bg-indigo-950/20 p-3 rounded-xl border border-indigo-900/30 text-xs text-indigo-300/90 leading-relaxed space-y-1">
+                            <div>
+                              <strong>กลยุทธ์แก้ทาง (Tactical Counter Index):</strong> {(rovDetails.counterIndex * 100).toFixed(0)}%
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {rovDetails.counterIndex > 0.50
+                                ? '🔥 ตรวจพบโอกาสแก้ทางฝั่งตรงข้าม! ทีมเรามีข้อดีเชิงยุทธศาสตร์ต้านทานแผนบุกหรือยกเลิกสถานะขัดขวางคู่แข่งได้เป็นอย่างดี (+0.25/0.50)'
+                                : 'ทีมคู่แข่งไม่มีภัยคุกคามแก้ทางเด่นชัด หรือทีมเรายังขาดตำแหน่งรับมือ/ต้านสถานะควบคุมอย่างเหมาะสม'}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1338,6 +1436,10 @@ export default function AdminGroupsPage() {
                               const recRole = getRecommendedRole(peer.jungian_type || '');
                               const comebackVal = getMemberComeback(peer);
                               const isTurnaround = comebackVal >= 4.2;
+                              const buildRec = rovDetails?.buildRecommendations?.[peer.user_id];
+                              const chosenHero = selectedHeroIds[peer.user_id]
+                                ? rovHeroes.find(h => h.id === selectedHeroIds[peer.user_id])
+                                : null;
 
                               return (
                                 <tr key={i} className="hover:bg-slate-900/30">
@@ -1346,23 +1448,41 @@ export default function AdminGroupsPage() {
                                     <div className="text-[0.65rem] text-slate-500">
                                       {peer.archetype ? `${peer.archetype} (${peer.quadrant})` : 'ไม่มีผลประเมิน'}
                                     </div>
+                                    {chosenHero && (
+                                      <div className="text-[10px] text-indigo-400 font-semibold mt-0.5">
+                                        🎮 {chosenHero.hero_name_en} ({chosenHero.primary_role})
+                                      </div>
+                                    )}
                                   </td>
                                   <td className="px-4 py-2.5">
                                     <span className="text-slate-400">{peer.chinese_element || peer.thai_element || 'ไม่พบข้อมูล'}</span>
                                   </td>
                                   <td className="px-4 py-2.5 space-y-1">
-                                    {recRole && (
-                                      <span className={`inline-block px-2 py-0.5 rounded text-[0.6rem] font-bold mr-1 ${recRole.color}`}>
-                                        {recRole.role}
-                                      </span>
-                                    )}
-                                    {isTurnaround && (
-                                      <span className="inline-block px-2 py-0.5 rounded text-[0.6rem] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                                        ☄️ Turnaround Master (Clutch: {comebackVal.toFixed(1)})
-                                      </span>
-                                    )}
-                                    {!recRole && !isTurnaround && (
-                                      <span className="text-slate-500">-</span>
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      {recRole && (
+                                        <span className={`inline-block px-2 py-0.5 rounded text-[0.6rem] font-bold ${recRole.color}`}>
+                                          {recRole.role}
+                                        </span>
+                                      )}
+                                      {isTurnaround && (
+                                        <span className="inline-block px-2 py-0.5 rounded text-[0.6rem] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                          ☄️ Turnaround Master (Clutch: {comebackVal.toFixed(1)})
+                                        </span>
+                                      )}
+                                      {!recRole && !isTurnaround && !buildRec && (
+                                        <span className="text-slate-500">-</span>
+                                      )}
+                                    </div>
+                                    {buildRec && (
+                                      <div className="mt-1.5 p-1.5 bg-slate-950/80 rounded-lg border border-slate-800 text-[10px] text-slate-300 space-y-1">
+                                        <div className="font-bold text-indigo-400">🛠️ {buildRec.buildName}</div>
+                                        <div className="text-[9px] text-slate-400 leading-tight">
+                                          <strong>ไอเทม:</strong> {buildRec.items.join(', ')}
+                                        </div>
+                                        <div className="text-[9px] text-slate-400 leading-tight">
+                                          <strong>สกิล:</strong> {buildRec.skills.join(', ')} | <strong>แท็ก:</strong> {buildRec.tags.join(', ')}
+                                        </div>
+                                      </div>
                                     )}
                                   </td>
                                 </tr>
@@ -1371,6 +1491,27 @@ export default function AdminGroupsPage() {
                           </tbody>
                         </table>
                       </div>
+                      
+                      {selectedProjectType === 'rov' && rovDetails && (
+                        <div className="space-y-2">
+                          {((rovDetails.rreAlerts && rovDetails.rreAlerts.length > 0) || 
+                            (rovDetails.crsiAlerts && rovDetails.crsiAlerts.length > 0)) && (
+                            <div className="p-3 bg-indigo-950/20 border border-indigo-900/30 rounded-xl space-y-1.5 text-xs text-indigo-300">
+                              <h5 className="font-bold text-indigo-400 flex items-center gap-1.5">
+                                <span>⚠️</span> สถิติตัวแปรพฤติกรรมในเลน (Lane Behavior Warnings)
+                              </h5>
+                              <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-300 pl-1">
+                                {rovDetails.rreAlerts?.map((alert: string, idx: number) => (
+                                  <li key={idx}>{alert}</li>
+                                ))}
+                                {rovDetails.crsiAlerts?.map((alert: string, idx: number) => (
+                                  <li key={idx}>{alert}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* KWI Wellness Dimension Averages */}
