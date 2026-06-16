@@ -57,7 +57,7 @@ VALUES
   ('Omni Arms', 'Omni Arms', 'Attack', ARRAY['physical_attack', 'attack_speed', 'critical', 'cd_reduction', 'lifesteal'], 'HIGH_RISK_FULL_DAMAGE'),
   ('Spear of Longinus', 'Spear of Longinus', 'Attack', ARRAY['physical_attack', 'cd_reduction', 'armor_pierce', 'defense_reduction'], 'SAFE_PLAY_BRUISER'),
   ('Shield of Lost', 'Shield of Lost', 'Defense', ARRAY['armor', 'max_hp', 'attack_speed_reduction'], 'SAFE_PLAY_BRUISER'),
-  ('Fenrir\'s Tooth', 'Fenrir\'s Tooth', 'Attack', ARRAY['physical_attack', 'low_hp_damage_bonus'], 'HIGH_RISK_FULL_DAMAGE'),
+  ('Fenrir''s Tooth', 'Fenrir''s Tooth', 'Attack', ARRAY['physical_attack', 'low_hp_damage_bonus'], 'HIGH_RISK_FULL_DAMAGE'),
   ('Muramasa', 'Muramasa', 'Attack', ARRAY['physical_attack', 'cd_reduction', 'armor_pierce_pct'], 'HIGH_RISK_FULL_DAMAGE'),
   ('Blade of Eternity', 'Blade of Eternity', 'Defense', ARRAY['armor', 'resurrection'], 'HIGH_RISK_FULL_DAMAGE')
 ON CONFLICT (item_name_en) DO UPDATE 
