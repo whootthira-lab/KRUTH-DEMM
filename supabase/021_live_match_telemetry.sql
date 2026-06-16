@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS live_match_telemetry (
   gold_difference     INTEGER NOT NULL DEFAULT 0,
   team_hero_ids       UUID[] DEFAULT '{}',
   opponent_hero_ids   UUID[] DEFAULT '{}',
-  coach_id            UUID REFERENCES auth.users(id),
+  coach_id            TEXT REFERENCES users(id), -- Align with users.id TEXT type
   chat_logs           JSONB DEFAULT '[]', -- Array of [{role: 'user'|'assistant', content: '...', timestamp: '...'}]
   created_at          TIMESTAMPTZ DEFAULT now(),
   UNIQUE(session_id, group_number)
@@ -23,7 +23,7 @@ CREATE POLICY live_match_telemetry_policy ON live_match_telemetry
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM users 
-      WHERE id = auth.uid() AND (
+      WHERE id = auth.uid()::text AND ( -- Cast auth.uid() UUID to text
         is_super_admin = true OR 
         org_id = (SELECT org_id FROM group_sessions WHERE id = session_id)
       )
