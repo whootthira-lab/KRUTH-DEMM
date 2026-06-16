@@ -978,6 +978,15 @@ export default function AdminGroupsPage() {
                             >
                               <span>⚡</span> วิเคราะห์แนวโน้มและบริการกลุ่ม
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.location.href = `/coach/war-room?orgId=${selectedOrgId}&sessionId=${selectedSessionId}&groupNumber=${groupNo}`;
+                              }}
+                              className="w-full mt-1.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[0.7rem] font-bold transition-colors shadow-sm flex items-center justify-center gap-1.5"
+                            >
+                              <span>🎮</span> เข้าสู่ Live War Room
+                            </button>
                           </div>
                         );
                       })}
@@ -1405,6 +1414,17 @@ export default function AdminGroupsPage() {
                       >
                         {actionLoading ? 'กำลังประมวลผล...' : '💾 บันทึกการจำลองการฟอร์มทีม'}
                       </button>
+                      {selectedProjectType === 'rov' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.location.href = `/coach/war-room?orgId=${selectedOrgId}&sessionId=${selectedSessionId}&groupNumber=${analyzingGroupNo}`;
+                          }}
+                          className="w-full py-2.5 bg-indigo-800 hover:bg-indigo-750 text-white rounded-xl text-xs font-bold transition-colors shadow-md flex items-center justify-center gap-1.5 mt-2"
+                        >
+                          <span>🎮</span> เข้าสู่ Live War Room
+                        </button>
+                      )}
                     </div>
 
                   </div>
