@@ -21,12 +21,13 @@ ALTER TABLE live_match_telemetry ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS live_match_telemetry_policy ON live_match_telemetry;
 CREATE POLICY live_match_telemetry_policy ON live_match_telemetry 
   FOR ALL USING (
+    (SELECT is_super_admin FROM users WHERE id = auth.uid()::text) = true
+    OR
     EXISTS (
-      SELECT 1 FROM users 
-      WHERE id = auth.uid()::text AND ( -- Cast auth.uid() UUID to text
-        is_super_admin = true OR 
-        org_id = (SELECT org_id FROM group_sessions WHERE id = session_id)
-      )
+      SELECT 1 FROM org_members 
+      WHERE org_members.org_id = (SELECT org_id FROM group_sessions WHERE id = session_id)
+        AND org_members.user_id = auth.uid()::text 
+        AND org_members.role = 'admin'
     )
   );
 
