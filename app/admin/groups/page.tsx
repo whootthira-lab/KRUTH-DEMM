@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+  calcTeamSynergy,
+  calcRoVMatchCapability,
+  calcCombatDominance,
+  SimProfile
+} from '@/lib/scoring';
 
 interface Org {
   id: string;
@@ -16,8 +22,25 @@ interface Member {
   role: string;
   full_name: string;
   gender: string;
+  thai_element?: string;
+  chinese_element?: string;
   archetype: string;
   quadrant: string;
+  score_o?: number;
+  score_c?: number;
+  score_e?: number;
+  score_a?: number;
+  score_n?: number;
+  quadrant_primary?: string;
+  via_dominant?: string;
+  via_scores?: Record<string, number>;
+  jungian_type?: string;
+  jungian_scores?: Record<string, number>;
+  pdcr_fire?: number;
+  pdcr_wind?: number;
+  pdcr_water?: number;
+  pdcr_earth?: number;
+  pdcr_dominant?: string;
   kwi?: {
     vitality: number;
     meaning: number;
@@ -25,7 +48,65 @@ interface Member {
     mastery: number;
     resilience: number;
   };
+  delta_tilt?: {
+    anger: number;
+    aggression: number;
+  };
 }
+
+// Helpers for delta_tilt calculation and JSON parsing
+function parseDeltaTilt(message: string) {
+  if (!message) return { anger: 0.0, aggression: 0.0 };
+  const swearWords = /เฮงซวย|แม่ง|เหี้ย|สัตว์|ควาย|fucking|shitty/gi;
+  const insultWords = /ด่า|โง่|ทุเรศ|บ้า|เลว|กระจอก/gi;
+  const threatWords = /ขู่|ทำร้าย|จะฆ่า|คอยดู|ระวังตัว/gi;
+  const angryWords = /โกรธ|โมโห|เดือด|ฉุน/g;
+  const frustratedWords = /รำคาญ|เหนื่อยแล้ว|เบื่อ|เซ็ง/g;
+  const impatientWords = /ช้า|รีบ|ไวๆ|ด่วน/g;
+
+  const fSwear = (message.match(swearWords) || []).length;
+  const fInsult = (message.match(insultWords) || []).length;
+  const fThreat = (message.match(threatWords) || []).length;
+  const fAngry = (message.match(angryWords) || []).length;
+  const fFrustrated = (message.match(frustratedWords) || []).length;
+  const fImpatient = (message.match(impatientWords) || []).length;
+
+  return {
+    anger: 0.5 * fAngry + 0.3 * fFrustrated + 0.2 * fImpatient,
+    aggression: 0.5 * fSwear + 0.3 * fInsult + 0.2 * fThreat
+  };
+}
+
+const parseJsonField = (field: any) => {
+  if (typeof field === 'string') {
+    try { return JSON.parse(field); } catch { return {}; }
+  }
+  return field || {};
+};
+
+const getRecommendedRole = (jungian: string) => {
+  if (!jungian) return null;
+  if (jungian.includes('TJ')) return { role: 'PM / Shot Caller', color: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
+  if (jungian.includes('FJ')) return { role: 'Facilitator / Morale Booster', color: 'bg-teal-500/10 text-teal-400 border border-teal-500/20' };
+  return null;
+};
+
+const getMemberComeback = (m: Member) => {
+  const r = m.kwi?.resilience ?? 3.0;
+  const n = m.score_n ?? 3.0;
+  const t = m.via_scores?.T ?? 3.0;
+  const dt = (m.delta_tilt?.anger || 0.0) * (m.delta_tilt?.aggression || 0.0);
+  return Math.max(1.0, Math.min(5.0, (0.4 * r + 0.3 * (5 - n) + 0.3 * t) - 0.2 * dt));
+};
+
+const projectTypes = [
+  { value: 'innovation', label: '💡 โครงการนวัตกรรมและวิจัย (Innovation & R&D)' },
+  { value: 'execution', label: '🎯 โครงการส่งมอบงานด่วน (Execution & Operations)' },
+  { value: 'crisis_management', label: '🛡️ จัดการภาวะวิกฤต (Crisis Management)' },
+  { value: 'cohesion', label: '🤝 เชื่อมสัมพันธ์พนักงาน (Cohesion & PR)' },
+  { value: 'rov', label: '🎮 จำลองอีสปอร์ต RoV (Esports Match)' },
+  { value: 'combat', label: '🥊 จำลองกีฬาบุคคลต่อสู้ (Combat Sports)' },
+];
 
 interface Session {
   id: string;
@@ -58,6 +139,15 @@ export default function AdminGroupsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [analyzingGroupNo, setAnalyzingGroupNo] = useState<number | null>(null);
+
+  const [selectedProjectType, setSelectedProjectType] = useState<string>('innovation');
+  const [oppFirePct, setOppFirePct] = useState<number>(30);
+  const [oppAggression, setOppAggression] = useState<number>(2.5);
+  const [combatFighterId, setCombatFighterId] = useState<string>('');
+  const [oppElement, setOppElement] = useState<string>('Fire');
+  const [oppAggressionCombat, setOppAggressionCombat] = useState<number>(2.5);
+  const [oppNCombat, setOppNCombat] = useState<number>(3.0);
+  const [selectedLeaderId, setSelectedLeaderId] = useState<string>('');
 
   // Load organizations and check access on mount
   useEffect(() => {
@@ -106,6 +196,17 @@ export default function AdminGroupsPage() {
     }
   }, [selectedSessionId]);
 
+  // Initialize Fighter and Leader selections when the modal opens
+  useEffect(() => {
+    if (analyzingGroupNo !== null) {
+      const peers = groupedMembers[analyzingGroupNo] || [];
+      if (peers.length > 0) {
+        setCombatFighterId(peers[0].user_id);
+        setSelectedLeaderId(peers[0].user_id);
+      }
+    }
+  }, [analyzingGroupNo]);
+
   async function loadOrgs() {
     setLoadingOrgs(true);
     try {
@@ -132,7 +233,9 @@ export default function AdminGroupsPage() {
           users:user_id (
             id,
             full_name,
-            gender
+            gender,
+            thai_element,
+            chinese_element
           )
         `)
         .eq('org_id', selectedOrgId);
@@ -143,6 +246,8 @@ export default function AdminGroupsPage() {
         role: m.role || 'member',
         full_name: m.users?.full_name || 'ไม่ทราบชื่อ',
         gender: m.users?.gender || 'O',
+        thai_element: m.users?.thai_element || '',
+        chinese_element: m.users?.chinese_element || '',
         archetype: '',
         quadrant: ''
       }));
@@ -152,7 +257,25 @@ export default function AdminGroupsPage() {
         const userIds = parsedMembers.map(m => m.user_id);
         const { data: rData, error: rErr } = await supabase
           .from('results')
-          .select('user_id, archetype_name_th, quadrant_primary')
+          .select(`
+            user_id,
+            archetype_name_th,
+            quadrant_primary,
+            score_o,
+            score_c,
+            score_e,
+            score_a,
+            score_n,
+            via_dominant,
+            via_scores,
+            jungian_type,
+            jungian_scores,
+            pdcr_fire,
+            pdcr_wind,
+            pdcr_water,
+            pdcr_earth,
+            pdcr_dominant
+          `)
           .in('user_id', userIds)
           .order('created_at', { ascending: false });
           
@@ -166,9 +289,25 @@ export default function AdminGroupsPage() {
           });
 
           parsedMembers.forEach(m => {
-            if (latestResults[m.user_id]) {
-              m.archetype = latestResults[m.user_id].archetype_name_th;
-              m.quadrant = latestResults[m.user_id].quadrant_primary;
+            const r = latestResults[m.user_id];
+            if (r) {
+              m.archetype = r.archetype_name_th;
+              m.quadrant = r.quadrant_primary;
+              m.score_o = r.score_o;
+              m.score_c = r.score_c;
+              m.score_e = r.score_e;
+              m.score_a = r.score_a;
+              m.score_n = r.score_n;
+              m.quadrant_primary = r.quadrant_primary;
+              m.via_dominant = r.via_dominant;
+              m.via_scores = parseJsonField(r.via_scores);
+              m.jungian_type = r.jungian_type;
+              m.jungian_scores = parseJsonField(r.jungian_scores);
+              m.pdcr_fire = r.pdcr_fire;
+              m.pdcr_wind = r.pdcr_wind;
+              m.pdcr_water = r.pdcr_water;
+              m.pdcr_earth = r.pdcr_earth;
+              m.pdcr_dominant = r.pdcr_dominant;
             }
           });
         }
@@ -200,6 +339,41 @@ export default function AdminGroupsPage() {
             }
           });
         }
+
+        // 2c. Fetch latest router_cognitive_logs for these members (limit 1 per user)
+        const tiltPromises = userIds.map(async (uid) => {
+          try {
+            const { data, error } = await supabase
+              .from('router_cognitive_logs')
+              .select('user_message')
+              .eq('user_id', uid)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            
+            if (!error && data && data.user_message) {
+              const scored = parseDeltaTilt(data.user_message);
+              return { uid, tilt: scored };
+            }
+          } catch (e) {
+            console.error("Error loading tilt for user:", uid, e);
+          }
+          return { uid, tilt: { anger: 0.0, aggression: 0.0 } };
+        });
+
+        const tiltResults = await Promise.all(tiltPromises);
+        const latestTilt: Record<string, { anger: number; aggression: number }> = {};
+        tiltResults.forEach(res => {
+          latestTilt[res.uid] = res.tilt;
+        });
+
+        parsedMembers.forEach(m => {
+          if (latestTilt[m.user_id]) {
+            m.delta_tilt = latestTilt[m.user_id];
+          } else {
+            m.delta_tilt = { anger: 0.0, aggression: 0.0 };
+          }
+        });
       }
 
       setMembers(parsedMembers);
@@ -510,6 +684,67 @@ export default function AdminGroupsPage() {
     };
   };
 
+  async function handleSaveSimulation(groupNo: number) {
+    if (!selectedOrgId) return;
+    const peers = groupedMembers[groupNo] || [];
+    if (peers.length === 0) return;
+    
+    setActionLoading(true);
+    try {
+      const simProfiles = peers as unknown as SimProfile[];
+      const synergyRes = calcTeamSynergy(simProfiles, selectedProjectType);
+      
+      let finalSynergy = synergyRes.synergy;
+      let friction = 'GREEN';
+      if (finalSynergy < 40) friction = 'RED';
+      else if (finalSynergy < 60) friction = 'ORANGE';
+      else if (finalSynergy < 75) friction = 'YELLOW';
+
+      if (selectedProjectType === 'rov') {
+        const rovRes = calcRoVMatchCapability(
+          synergyRes.synergy,
+          synergyRes.comeback,
+          { element_fire_pct: oppFirePct, aggression: oppAggression },
+          simProfiles
+        );
+        finalSynergy = rovRes.capability;
+      } else if (selectedProjectType === 'combat') {
+        const fighter = simProfiles.find(p => p.user_id === combatFighterId);
+        if (fighter) {
+          const oppFighter: SimProfile = {
+            user_id: 'opponent',
+            full_name: 'Opponent Fighter',
+            chinese_element: oppElement,
+            score_n: oppNCombat,
+            delta_tilt: { anger: oppAggressionCombat, aggression: oppAggressionCombat }
+          };
+          const combatRes = calcCombatDominance(fighter, oppFighter);
+          finalSynergy = combatRes.dominance;
+        }
+      }
+
+      const userIds = peers.map(m => m.user_id);
+      
+      const { error } = await supabase.from('group_simulations').insert({
+        org_id: selectedOrgId,
+        leader_id: selectedLeaderId || peers[0]?.user_id || '',
+        selected_user_ids: userIds,
+        project_type: selectedProjectType,
+        calculated_synergy: finalSynergy,
+        friction_risk_level: friction,
+        bot_recommendation: `ประเภทโครงการ: ${selectedProjectType}, ระดับความประสานงานของทีม: ${finalSynergy}%, ศักยภาพหลัก: ${synergyRes.taskPotential.toFixed(2)}, Comeback Potential: ${synergyRes.comeback.toFixed(2)}`
+      });
+
+      if (error) throw error;
+      showMsg('บันทึกผลการจำลองกลุ่มสำเร็จแล้ว!', 'success');
+      setAnalyzingGroupNo(null);
+    } catch (e: any) {
+      showMsg('เกิดข้อผิดพลาดในการบันทึกจำลองกลุ่ม: ' + e.message, 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   // Helper to group assignments
   const groupedMembers: Record<number, Member[]> = {};
   assignments.forEach(a => {
@@ -782,138 +1017,440 @@ export default function AdminGroupsPage() {
           const analysis = getGroupAnalysis(analyzingGroupNo);
           if (!analysis) return null;
 
+          const peers = groupedMembers[analyzingGroupNo] || [];
+          const simProfiles = peers as unknown as SimProfile[];
+          const synergyRes = calcTeamSynergy(simProfiles, selectedProjectType);
+          
+          let displayScore = synergyRes.synergy;
+          let displayLabel = 'ดัชนีประสานพลังทีม (Team Synergy)';
+          let rovDetails = null;
+          let combatDetails = null;
+          
+          if (selectedProjectType === 'rov') {
+            const rovRes = calcRoVMatchCapability(
+              synergyRes.synergy,
+              synergyRes.comeback,
+              { element_fire_pct: oppFirePct, aggression: oppAggression },
+              simProfiles
+            );
+            displayScore = rovRes.capability;
+            displayLabel = 'ขีดความสามารถ (Esports Capability)';
+            rovDetails = rovRes;
+          } else if (selectedProjectType === 'combat') {
+            const fighter = simProfiles.find(p => p.user_id === combatFighterId);
+            if (fighter) {
+              const oppFighter: SimProfile = {
+                user_id: 'opponent',
+                full_name: 'Opponent Fighter',
+                chinese_element: oppElement,
+                score_n: oppNCombat,
+                delta_tilt: { anger: oppAggressionCombat, aggression: oppAggressionCombat }
+              };
+              const combatRes = calcCombatDominance(fighter, oppFighter);
+              displayScore = combatRes.dominance;
+              displayLabel = 'ดัชนีความเหนือกว่า (Combat Dominance)';
+              combatDetails = combatRes;
+            }
+          }
+
+          let friction = 'GREEN';
+          let frictionText = 'ต่ำ (Low Friction)';
+          let frictionBg = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+          if (displayScore < 40) {
+            friction = 'RED';
+            frictionText = 'วิกฤต (Critical Friction)';
+            frictionBg = 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+          } else if (displayScore < 60) {
+            friction = 'ORANGE';
+            frictionText = 'สูง (High Friction)';
+            frictionBg = 'bg-orange-500/10 text-orange-400 border border-orange-500/20';
+          } else if (displayScore < 75) {
+            friction = 'YELLOW';
+            frictionText = 'ปานกลาง (Medium Friction)';
+            frictionBg = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+          }
+
           return (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100 flex flex-col p-6 animate-fade-in text-left">
-                <div className="flex justify-between items-center border-b pb-4 mb-4">
-                  <h3 className="text-lg font-bold text-[#1A3A5C] flex items-center gap-2">
-                    <span>📊</span> วิเคราะห์แนวโน้มและการบริหาร — กลุ่มย่อยที่ {analyzingGroupNo}
-                  </h3>
+            <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-[#0f172a] text-slate-100 rounded-3xl max-w-5xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-800 flex flex-col p-6 animate-fade-in text-left">
+                
+                {/* Modal Header */}
+                <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-4">
+                  <div>
+                    <h3 className="text-xl font-black text-indigo-400 flex items-center gap-2">
+                      <span>📊</span> เครื่องมือประเมินและจำลองฟอร์มทีม — กลุ่มย่อยที่ {analyzingGroupNo}
+                    </h3>
+                    <p className="text-xs text-slate-400">ระบบประมวลผลคำนวณจิตวิทยาและเบญจธาตุจีน (Wu Xing) สำหรับจัดสรรทีม</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setAnalyzingGroupNo(null)}
-                    className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+                    className="text-slate-400 hover:text-slate-200 text-xl font-bold p-1 transition-colors"
                   >
                     ✕
                   </button>
                 </div>
 
-                <div className="space-y-6">
-                  {/* Synergy Type Profile */}
-                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4.5 rounded-2xl border border-blue-100/50 space-y-2">
-                    <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider block">สไตล์การประสานพลังทีม (Synergy Style)</span>
-                    <h4 className="text-base font-black text-[#1A3A5C]">{analysis.synergyType}</h4>
-                    <p className="text-xs text-gray-650 leading-relaxed">{analysis.synergyDesc}</p>
-                  </div>
-
-                  {/* KWI Wellness Dimension Averages */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">📊 สรุปค่าเฉลี่ยสุขภาวะกลุ่ม (Group Wellness Averages)</h4>
-                    {analysis.hasKwi ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {[
-                          { label: '🌟 พลังชีวิต (Vitality)', val: analysis.avg.vitality, color: 'bg-emerald-500' },
-                          { label: '🧘 ความหมายชีวิต (Meaning)', val: analysis.avg.meaning, color: 'bg-indigo-500' },
-                          { label: '💙 สายสัมพันธ์ (Connection)', val: analysis.avg.connection, color: 'bg-blue-500' },
-                          { label: '🎯 การเติบโต (Mastery)', val: analysis.avg.mastery, color: 'bg-purple-500' },
-                          { label: '🛡️ ความยืดหยุ่น (Resilience)', val: analysis.avg.resilience, color: 'bg-pink-500' },
-                        ].map((dim, i) => (
-                          <div key={i} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex flex-col justify-between space-y-1">
-                            <div className="flex justify-between items-center text-xs font-bold">
-                              <span className="text-gray-600">{dim.label}</span>
-                              <span className="text-[#1A3A5C]">{dim.val} / 5.0</span>
-                            </div>
-                            <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-                              <div className={`h-full ${dim.color}`} style={{ width: `${(dim.val / 5) * 100}%` }} />
-                            </div>
-                          </div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-y-auto">
+                  
+                  {/* Left Column (Simulation Controls & Main HUD) */}
+                  <div className="lg:col-span-5 space-y-6">
+                    
+                    {/* Mission Selector */}
+                    <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-3">
+                      <label className="text-xs font-bold text-slate-300 block">🎯 ประเภทภารกิจจำลอง (Simulation Mode)</label>
+                      <select
+                        value={selectedProjectType}
+                        onChange={e => setSelectedProjectType(e.target.value)}
+                        className="w-full border border-slate-700 bg-slate-800 rounded-lg p-2.5 text-xs text-slate-100 outline-none focus:border-indigo-500"
+                      >
+                        {projectTypes.map(pt => (
+                          <option key={pt.value} value={pt.value}>{pt.label}</option>
                         ))}
+                      </select>
+                    </div>
+
+                    {/* HUD Gauge */}
+                    <div className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/80 flex flex-col items-center justify-center text-center space-y-4">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">{displayLabel}</span>
+                      
+                      {/* Premium Circle SVG Gauge */}
+                      <div className="relative w-32 h-32 flex items-center justify-center">
+                        <svg className="absolute w-full h-full transform -rotate-90">
+                          <circle cx="64" cy="64" r="54" className="stroke-slate-800" strokeWidth="8" fill="transparent" />
+                          <circle
+                            cx="64"
+                            cy="64"
+                            r="54"
+                            className="stroke-indigo-500 transition-all duration-500"
+                            strokeWidth="8"
+                            fill="transparent"
+                            strokeDasharray={2 * Math.PI * 54}
+                            strokeDashoffset={2 * Math.PI * 54 * (1 - Math.min(100, displayScore) / 100)}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div className="flex flex-col items-center">
+                          <span className="text-3xl font-black tracking-tight text-white">{displayScore}%</span>
+                          <span className="text-[0.6rem] text-slate-400">Score</span>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="bg-yellow-50 text-yellow-850 border border-yellow-100 p-4 rounded-xl text-center text-xs font-semibold">
-                        ⚠️ สมาชิกในกลุ่มนี้ยังไม่ได้ทำแบบประเมินสุขภาวะจิตใจ KWI (ระบบจึงจำลองค่าเริ่มต้น 3.0/5.0 ไว้แทนก่อนชั่วคราวค่ะ)
+
+                      {/* Info indicators */}
+                      <div className="w-full grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-850">
+                          <span className="text-[0.65rem] text-slate-500 block mb-0.5">Friction Risk</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[0.65rem] font-bold ${frictionBg}`}>
+                            {frictionText}
+                          </span>
+                        </div>
+                        <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-850">
+                          <span className="text-[0.65rem] text-slate-500 block mb-0.5">Clutch Potential</span>
+                          <span className="font-extrabold text-indigo-400">{synergyRes.comeback.toFixed(2)} / 5.0</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Esports Controls Panel */}
+                    {selectedProjectType === 'rov' && (
+                      <div className="bg-slate-900/60 p-4.5 rounded-2xl border border-indigo-900/30 space-y-4">
+                        <h4 className="text-xs font-black text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                          <span>🎮</span> จำลองทีมคู่แข่ง Esports (RoV Match Simulator)
+                        </h4>
+                        
+                        <div className="space-y-3 text-xs">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between font-semibold">
+                              <span className="text-slate-300">สัดส่วนธาตุไฟฝั่งตรงข้าม (Opponent Fire %):</span>
+                              <span className="text-indigo-400">{oppFirePct}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={oppFirePct}
+                              onChange={e => setOppFirePct(parseInt(e.target.value))}
+                              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between font-semibold">
+                              <span className="text-slate-300">ความก้าวร้าวของคู่แข่ง (Opponent Aggression):</span>
+                              <span className="text-indigo-400">{oppAggression.toFixed(1)} / 5.0</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="1.0"
+                              max="5.0"
+                              step="0.1"
+                              value={oppAggression}
+                              onChange={e => setOppAggression(parseFloat(e.target.value))}
+                              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            />
+                          </div>
+                        </div>
+
+                        {rovDetails && (
+                          <div className="bg-indigo-950/20 p-3 rounded-xl border border-indigo-900/30 text-xs text-indigo-300/90 leading-relaxed">
+                            <strong>กลยุทธ์จำลอง:</strong> {
+                              rovDetails.counterIndex > 0.50
+                                ? '🔥 ตรวจพบแผน Early Snowball ของคู่ต่อสู้! โบนัส Tactical Counter ของทีมเปิดใช้งานสำเร็จ (+0.75)'
+                                : 'ทีมคู่แข่งไม่มีภัยคุกคาม Early Snowball หรือทีมเรายังขาดธาตุน้ำ/ประสานงานสำหรับต้านทานอย่างเหมาะสม'
+                            }
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
 
-                  {/* Strengths & Cautions */}
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100/50 space-y-2">
-                      <h5 className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
-                        <span>✅</span> จุดแข็งเด่นของกลุ่ม
-                      </h5>
-                      <ul className="list-disc list-inside text-xs text-gray-700 space-y-1 leading-relaxed pl-1">
-                        {analysis.strengths.map((str, i) => (
-                          <li key={i}>{str}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    {/* Combat Sports Controls Panel */}
+                    {selectedProjectType === 'combat' && (
+                      <div className="bg-slate-900/60 p-4.5 rounded-2xl border border-amber-900/30 space-y-4">
+                        <h4 className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                          <span>🥊</span> จำลองปะทะบุคคล (Combat Sports Simulator)
+                        </h4>
 
-                    <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100/50 space-y-2">
-                      <h5 className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
-                        <span>⚠️</span> ข้อควรระวังในการร่วมงาน
-                      </h5>
-                      <ul className="list-disc list-inside text-xs text-gray-700 space-y-1 leading-relaxed pl-1">
-                        {analysis.cautions.map((cau, i) => (
-                          <li key={i}>{cau}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
+                        <div className="space-y-3 text-xs">
+                          {/* Choose Fighter */}
+                          <div className="space-y-1.5">
+                            <label className="text-slate-300 font-semibold block">เลือกนักสู้ของทีมเรา (Fighter):</label>
+                            <select
+                              value={combatFighterId}
+                              onChange={e => setCombatFighterId(e.target.value)}
+                              className="w-full border border-slate-700 bg-[#0f172a] rounded-lg p-2 text-xs text-slate-100 outline-none"
+                            >
+                              {peers.map(m => (
+                                <option key={m.user_id} value={m.user_id}>{m.full_name}</option>
+                              ))}
+                            </select>
+                          </div>
 
-                  {/* Manager Guidelines */}
-                  <div className="bg-teal-50/50 p-4.5 rounded-2xl border border-teal-100/50 space-y-2">
-                    <h5 className="text-xs font-bold text-teal-800 flex items-center gap-1.5">
-                      <span>💡</span> แนวทางการบริหารจัดงาน (Management Guidelines)
-                    </h5>
-                    <p className="text-xs text-gray-755 leading-relaxed">{analysis.delegationTips}</p>
-                  </div>
+                          <div className="border-t border-slate-800 pt-3 space-y-3">
+                            <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider block">คู่ต่อสู้จำลอง (Mock Opponent)</span>
+                            
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[0.65rem] text-slate-400 block mb-1">ธาตุ (Element):</label>
+                                <select
+                                  value={oppElement}
+                                  onChange={e => setOppElement(e.target.value)}
+                                  className="w-full border border-slate-700 bg-[#0f172a] rounded p-1 text-xs text-slate-100 outline-none"
+                                >
+                                  <option value="Wood">ธาตุไม้ (Wood)</option>
+                                  <option value="Fire">ธาตุไฟ (Fire)</option>
+                                  <option value="Earth">ธาตุดิน (Earth)</option>
+                                  <option value="Metal">ธาตุทอง (Metal)</option>
+                                  <option value="Water">ธาตุน้ำ (Water)</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-[0.65rem] text-slate-400 block mb-1">กังวล (Neuroticism):</label>
+                                <input
+                                  type="number"
+                                  min="1.0"
+                                  max="5.0"
+                                  step="0.1"
+                                  value={oppNCombat}
+                                  onChange={e => setOppNCombat(parseFloat(e.target.value))}
+                                  className="w-full border border-slate-700 bg-[#0f172a] rounded p-1 text-xs text-slate-100 outline-none"
+                                />
+                              </div>
+                            </div>
 
-                  {/* Group Members detail table */}
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">👥 รายชื่อและบุคลิกภาพพนักงานในกลุ่ม</h4>
-                    <div className="border border-gray-150 rounded-xl overflow-hidden text-xs">
-                      <table className="w-full text-left">
-                        <thead className="bg-gray-50 border-b">
-                          <tr>
-                            <th className="px-4 py-2">ชื่อพนักงาน</th>
-                            <th className="px-4 py-2">สไตล์พฤติกรรม (Archetype)</th>
-                            <th className="px-4 py-2">กลุ่ม (Quadrant)</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y text-gray-700">
-                          {analysis.peers.map((peer, i) => (
-                            <tr key={i} className="hover:bg-gray-50/30">
-                              <td className="px-4 py-2 font-bold text-gray-800">{peer.full_name}</td>
-                              <td className="px-4 py-2 text-gray-600">{peer.archetype || 'ยังไม่ได้ทำแบบทดสอบ'}</td>
-                              <td className="px-4 py-2">
-                                <span className={`px-2 py-0.5 rounded-full font-bold text-[0.65rem] ${
-                                  peer.quadrant === 'Q1' ? 'bg-blue-100 text-blue-800' :
-                                  peer.quadrant === 'Q2' ? 'bg-amber-100 text-amber-800' :
-                                  peer.quadrant === 'Q3' ? 'bg-emerald-100 text-emerald-800' :
-                                  peer.quadrant === 'Q4' ? 'bg-purple-100 text-purple-800' :
-                                  'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {peer.quadrant || 'ไม่ระบุ'}
-                                </span>
-                              </td>
-                            </tr>
+                            <div className="space-y-1">
+                              <div className="flex justify-between font-semibold">
+                                <span className="text-[0.65rem] text-slate-300">ความดุดัน (Opponent Aggression):</span>
+                                <span className="text-amber-400">{oppAggressionCombat.toFixed(1)}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="1.0"
+                                max="5.0"
+                                step="0.1"
+                                value={oppAggressionCombat}
+                                onChange={e => setOppAggressionCombat(parseFloat(e.target.value))}
+                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {combatDetails && (
+                          <div className="bg-amber-950/20 p-3 rounded-xl border border-amber-900/30 text-xs text-amber-300/90 space-y-1">
+                            <div><strong>Ego Penalty:</strong> {combatDetails.egoPenalty ? '🔴 ถูกลงทัณฑ์ประมาท (Ego Delusion) หักพลังลง 15%' : '✅ ไร้อาการหลงตัวเอง (ผ่านเกณฑ์ประเมินตนตามจริง)'}</div>
+                            <div><strong>Style Multiplier:</strong> {combatDetails.styleMultiplier > 1.0 ? '🎯 ชนะทางสไตล์! ได้รับตัวคูณเปรียบมวยเชิงตั้งรับ 1.2x' : 'ทรงมวยปกติ (ไม่มีใครได้เปรียบสไตล์)'}</div>
+                            <div><strong>Opponent Pressure:</strong> {combatDetails.pressure.toFixed(2)} / 5.0</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Simulation Save Panel */}
+                    <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-300 block">👑 เลือกผู้นำกลุ่มจำลอง (Leader):</label>
+                        <select
+                          value={selectedLeaderId}
+                          onChange={e => setSelectedLeaderId(e.target.value)}
+                          className="w-full border border-slate-700 bg-[#0f172a] rounded-lg p-2 text-xs text-slate-100 outline-none"
+                        >
+                          {peers.map(m => (
+                            <option key={m.user_id} value={m.user_id}>{m.full_name}</option>
                           ))}
-                        </tbody>
-                      </table>
+                        </select>
+                      </div>
+                      
+                      <button
+                        onClick={() => handleSaveSimulation(analyzingGroupNo)}
+                        disabled={actionLoading}
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-md flex items-center justify-center gap-1.5 disabled:bg-slate-750"
+                      >
+                        {actionLoading ? 'กำลังประมวลผล...' : '💾 บันทึกการจำลองการฟอร์มทีม'}
+                      </button>
                     </div>
+
                   </div>
+
+                  {/* Right Column (Members & Synergy Analysis) */}
+                  <div className="lg:col-span-7 space-y-6">
+                    
+                    {/* Synergy Style */}
+                    <div className="bg-gradient-to-br from-indigo-950/40 to-slate-950/40 p-4.5 rounded-2xl border border-indigo-900/30 space-y-1.5">
+                      <span className="text-[0.65rem] font-bold text-indigo-400 uppercase tracking-wider block">สไตล์การทำงานประสานพลัง (Synergy Style)</span>
+                      <h4 className="text-sm font-black text-white">{analysis.synergyType}</h4>
+                      <p className="text-xs text-slate-300 leading-relaxed">{analysis.synergyDesc}</p>
+                    </div>
+
+                    {/* Members List with Role Suggestions & Badges */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">👥 วิเคราะห์บทบาทและตรารางวัลสมาชิกทีม</h4>
+                      <div className="border border-slate-800 rounded-xl overflow-hidden text-xs">
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-900 text-slate-400 border-b border-slate-800">
+                            <tr>
+                              <th className="px-4 py-2.5">ชื่อพนักงาน</th>
+                              <th className="px-4 py-2.5">ธาตุเกิด</th>
+                              <th className="px-4 py-2.5">แนะนำบทบาท / ตราเกียรติยศ</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800 text-slate-300">
+                            {peers.map((peer, i) => {
+                              const recRole = getRecommendedRole(peer.jungian_type || '');
+                              const comebackVal = getMemberComeback(peer);
+                              const isTurnaround = comebackVal >= 4.2;
+
+                              return (
+                                <tr key={i} className="hover:bg-slate-900/30">
+                                  <td className="px-4 py-2.5">
+                                    <div className="font-bold text-white">{peer.full_name}</div>
+                                    <div className="text-[0.65rem] text-slate-500">
+                                      {peer.archetype ? `${peer.archetype} (${peer.quadrant})` : 'ไม่มีผลประเมิน'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5">
+                                    <span className="text-slate-400">{peer.chinese_element || peer.thai_element || 'ไม่พบข้อมูล'}</span>
+                                  </td>
+                                  <td className="px-4 py-2.5 space-y-1">
+                                    {recRole && (
+                                      <span className={`inline-block px-2 py-0.5 rounded text-[0.6rem] font-bold mr-1 ${recRole.color}`}>
+                                        {recRole.role}
+                                      </span>
+                                    )}
+                                    {isTurnaround && (
+                                      <span className="inline-block px-2 py-0.5 rounded text-[0.6rem] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                        ☄️ Turnaround Master (Clutch: {comebackVal.toFixed(1)})
+                                      </span>
+                                    )}
+                                    {!recRole && !isTurnaround && (
+                                      <span className="text-slate-500">-</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* KWI Wellness Dimension Averages */}
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">📊 ดัชนีสุขภาวะเฉลี่ยของทีม (Wellness Indicators)</h4>
+                      {analysis.hasKwi ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {[
+                            { label: '🌟 พลังชีวิต (Vitality)', val: analysis.avg.vitality, color: 'bg-emerald-500' },
+                            { label: '🧘 ความหมายชีวิต (Meaning)', val: analysis.avg.meaning, color: 'bg-indigo-500' },
+                            { label: '💙 สายสัมพันธ์ (Connection)', val: analysis.avg.connection, color: 'bg-blue-500' },
+                            { label: '🎯 การเติบโต (Mastery)', val: analysis.avg.mastery, color: 'bg-purple-500' },
+                            { label: '🛡️ ความยืดหยุ่น (Resilience)', val: analysis.avg.resilience, color: 'bg-pink-500' },
+                          ].map((dim, i) => (
+                            <div key={i} className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex flex-col justify-between space-y-1">
+                              <div className="flex justify-between items-center text-xs font-bold">
+                                <span className="text-slate-400">{dim.label}</span>
+                                <span className="text-white">{dim.val} / 5.0</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                <div className={`h-full ${dim.color}`} style={{ width: `${(dim.val / 5) * 100}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bg-slate-900/50 text-slate-400 border border-slate-800 p-4 rounded-xl text-center text-xs font-semibold">
+                          ⚠️ สมาชิกในกลุ่มยังไม่มีผลประเมิน KWI (ระบบจึงดึงค่า Default 3.0 กลางๆ ให้ก่อนชั่วคราว)
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Strengths & Cautions */}
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="bg-emerald-950/20 p-4 rounded-2xl border border-emerald-900/20 space-y-2">
+                        <h5 className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                          <span>✅</span> จุดแข็งประสานงานทีม
+                        </h5>
+                        <ul className="list-disc list-inside text-xs text-slate-300 space-y-1 pl-1 leading-relaxed">
+                          {analysis.strengths.map((str, i) => (
+                            <li key={i}>{str}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="bg-rose-950/20 p-4 rounded-2xl border border-rose-900/20 space-y-2">
+                        <h5 className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                          <span>⚠️</span> ข้อระวัง/อุปสรรคสำคัญ
+                        </h5>
+                        <ul className="list-disc list-inside text-xs text-slate-300 space-y-1 pl-1 leading-relaxed">
+                          {analysis.cautions.map((cau, i) => (
+                            <li key={i}>{cau}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Manager Guidelines */}
+                    <div className="bg-slate-900/40 p-4.5 rounded-2xl border border-slate-800 space-y-2">
+                      <h5 className="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
+                        <span>💡</span> แนวทางดูแลและบริการจัดการขององค์กร (Management Guidelines)
+                      </h5>
+                      <p className="text-xs text-slate-300 leading-relaxed">{analysis.delegationTips}</p>
+                    </div>
+
+                  </div>
+
                 </div>
 
-                <div className="flex justify-end border-t pt-4 mt-6">
+                {/* Footer buttons */}
+                <div className="flex justify-end border-t border-slate-800 pt-4 mt-6">
                   <button
                     type="button"
                     onClick={() => setAnalyzingGroupNo(null)}
-                    className="px-5 py-2 bg-[#1A3A5C] hover:bg-[#2E75B6] text-white rounded-xl text-xs font-bold transition-colors shadow-md"
+                    className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-colors shadow-md"
                   >
-                    ปิดหน้าต่าง
+                    ปิดแผงประเมิน
                   </button>
                 </div>
+
               </div>
             </div>
           );

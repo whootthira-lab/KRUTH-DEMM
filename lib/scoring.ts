@@ -463,3 +463,276 @@ export function generateDVJId(input: string): string {
   for (const ch of rev) hash += map[ch] || ch;
   return 'DEM-' + hash;
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// KRUTH MIND Core Engine v2.5 / v3.0 - Team Synergy & Sports Engine Math
+// ═══════════════════════════════════════════════════════════════════════
+
+export interface SimProfile {
+  user_id: string;
+  full_name: string;
+  gender?: string;
+  thai_element?: string;
+  chinese_element?: string;
+  score_o?: number;
+  score_c?: number;
+  score_e?: number;
+  score_a?: number;
+  score_n?: number;
+  quadrant_primary?: string;
+  via_dominant?: string;
+  via_scores?: Record<string, number>;
+  jungian_type?: string;
+  jungian_scores?: Record<string, number>;
+  kwi?: {
+    vitality: number;
+    meaning: number;
+    connection: number;
+    mastery: number;
+    resilience: number;
+  };
+  delta_tilt?: {
+    anger: number;
+    aggression: number;
+  };
+}
+
+// 1. Pairwise Compatibility Matrix v2.0
+export function calcPairwiseCompatibility(a: SimProfile, b: SimProfile): number {
+  // Score_VIA
+  const viaA = a.via_dominant || '';
+  const viaB = b.via_dominant || '';
+  let scoreVia = 0.6; // default neutral
+  const isViaPair = (x: string, y: string, k1: string, k2: string) => 
+    (x === k1 && y === k2) || (x === k2 && y === k1);
+
+  if (isViaPair(viaA, viaB, 'H', 'Tr')) scoreVia = 0.9;
+  else if (isViaPair(viaA, viaB, 'J', 'C')) scoreVia = 0.8;
+  else if (isViaPair(viaA, viaB, 'W', 'Tr')) scoreVia = 0.8;
+  else if (isViaPair(viaA, viaB, 'C', 'J')) scoreVia = 0.8;
+  else if (isViaPair(viaA, viaB, 'W', 'T')) scoreVia = 0.4;
+  else if (isViaPair(viaA, viaB, 'C', 'T')) scoreVia = 0.4;
+
+  // Score_Quad
+  const quadA = a.quadrant_primary || '';
+  const quadB = b.quadrant_primary || '';
+  let scoreQuad = 0.6; // default neutral
+  const isQuadPair = (x: string, y: string, k1: string, k2: string) => 
+    (x === k1 && y === k2) || (x === k2 && y === k1);
+
+  if (isQuadPair(quadA, quadB, 'Q1', 'Q4')) scoreQuad = 0.9;
+  else if (isQuadPair(quadA, quadB, 'Q2', 'Q3')) scoreQuad = 0.8;
+  else if (quadA === 'Q4' && quadB === 'Q4') scoreQuad = 0.5;
+
+  // Score_Jung
+  const jungA = a.jungian_type || '';
+  const jungB = b.jungian_type || '';
+  let scoreJung = 0.6; // default neutral
+  const isJungPair = (x: string, y: string, k1: string, k2: string) => 
+    (x === k1 && y === k2) || (x === k2 && y === k1);
+
+  if (isJungPair(jungA, jungB, 'TJ', 'FJ')) scoreJung = 0.8;
+  else if (isJungPair(jungA, jungB, 'TJ', 'TP')) scoreJung = 0.8;
+  else if (isJungPair(jungA, jungB, 'TP', 'FP')) scoreJung = 0.8;
+  else if (isJungPair(jungA, jungB, 'FJ', 'FP')) scoreJung = 0.8;
+  else if (isJungPair(jungA, jungB, 'TJ', 'FP')) scoreJung = 0.5;
+
+  const raw = 0.4 * scoreVia + 0.3 * scoreQuad + 0.3 * scoreJung;
+  const rawDiff = raw - 0.4;
+  const safeDiff = rawDiff < 0 ? 0 : rawDiff;
+  return Math.max(15, Math.min(98, (safeDiff / 0.5) * 100));
+}
+
+// 2. Wu Xing Element Harmony Integration
+export function calcWuXingScore(a: SimProfile, b: SimProfile): number {
+  const getEl = (str: string) => {
+    if (!str) return '';
+    if (str.includes('Wood') || str.includes('ไม้')) return 'Wood';
+    if (str.includes('Fire') || str.includes('ไฟ')) return 'Fire';
+    if (str.includes('Earth') || str.includes('ดิน')) return 'Earth';
+    if (str.includes('Metal') || str.includes('ทอง')) return 'Metal';
+    if (str.includes('Water') || str.includes('น้ำ')) return 'Water';
+    return '';
+  };
+  const elA = getEl(a.chinese_element || a.thai_element || '');
+  const elB = getEl(b.chinese_element || b.thai_element || '');
+
+  if (!elA || !elB) return 1.0;
+  if (elA === elB) return 1.0;
+
+  // Promoting Cycle: Wood -> Fire -> Earth -> Metal -> Water -> Wood
+  const isPromoting = (x: string, y: string) => {
+    const pairs = [['Wood','Fire'], ['Fire','Earth'], ['Earth','Metal'], ['Metal','Water'], ['Water','Wood']];
+    return pairs.some(p => (p[0] === x && p[1] === y) || (p[0] === y && p[1] === x));
+  };
+
+  if (isPromoting(elA, elB)) return 1.0;
+  return 0.4;
+}
+
+// 3. Combined Compatibility Score (25% Psych + 75% Wu Xing)
+export function calcCombinedScore(a: SimProfile, b: SimProfile): number {
+  const compat = calcPairwiseCompatibility(a, b);
+  const wuXing = calcWuXingScore(a, b);
+  return 0.25 * compat + 0.75 * (wuXing * 100);
+}
+
+// 4. Task-Specific Potential Matrix
+export function calcTaskPotential(members: SimProfile[], projectType: string): { score: number; comeback?: number } {
+  if (members.length === 0) return { score: 3.0 };
+
+  const len = members.length;
+  let oSum = 0, cSum = 0, eSum = 0, aSum = 0, nSum = 0, rSum = 0, tSum = 0;
+  let q1Count = 0, q3Count = 0, q4Count = 0;
+  let angerSum = 0, aggressionSum = 0, tiltCount = 0;
+
+  members.forEach(m => {
+    oSum += m.score_o ?? 3.0;
+    cSum += m.score_c ?? 3.0;
+    eSum += m.score_e ?? 3.0;
+    aSum += m.score_a ?? 3.0;
+    nSum += m.score_n ?? 3.0;
+    rSum += m.kwi?.resilience ?? 3.0;
+    tSum += m.via_scores?.T ?? 3.0; // T stands for Temperance
+
+    if (m.quadrant_primary === 'Q1') q1Count++;
+    if (m.quadrant_primary === 'Q3') q3Count++;
+    if (m.quadrant_primary === 'Q4') q4Count++;
+
+    if (m.delta_tilt) {
+      angerSum += m.delta_tilt.anger;
+      aggressionSum += m.delta_tilt.aggression;
+      tiltCount++;
+    }
+  });
+
+  const avgO = oSum / len;
+  const avgC = cSum / len;
+  const avgE = eSum / len;
+  const avgA = aSum / len;
+  const avgN = nSum / len;
+  const avgR = rSum / len;
+  const avgT = tSum / len;
+
+  const q1Density = q1Count / len;
+  const q3Density = q3Count / len;
+  const q4Density = q4Count / len;
+
+  const avgAnger = tiltCount > 0 ? angerSum / tiltCount : 0.0;
+  const avgAggression = tiltCount > 0 ? aggressionSum / tiltCount : 0.0;
+  const deltaTilt = avgAnger * avgAggression;
+
+  // Comeback Capability (Clutch Factor)
+  const comeback = Math.max(1.0, Math.min(5.0, (0.4 * avgR + 0.3 * (5 - avgN) + 0.3 * avgT) - 0.2 * deltaTilt));
+
+  let score = 3.0;
+  if (projectType === 'innovation') {
+    score = Math.max(1.0, Math.min(5.0, 0.6 * avgO + 0.4 * (q1Density * 5.0)));
+  } else if (projectType === 'execution') {
+    score = Math.max(1.0, Math.min(5.0, 0.6 * avgC + 0.4 * (q4Density * 5.0)));
+  } else if (projectType === 'crisis_management') {
+    score = Math.max(1.0, Math.min(5.0, 0.5 * (5 - avgN) + 0.5 * avgR));
+  } else if (projectType === 'cohesion') {
+    score = Math.max(1.0, Math.min(5.0, 0.6 * ((avgA + avgE) / 2) + 0.4 * (q3Density * 5.0)));
+  } else if (projectType === 'rov' || projectType === 'combat') {
+    score = comeback;
+  }
+
+  return { score, comeback };
+}
+
+// 5. Full Team Synergy Index
+export function calcTeamSynergy(members: SimProfile[], projectType: string): { synergy: number; taskPotential: number; comeback: number } {
+  if (members.length === 0) return { synergy: 0, taskPotential: 0.0, comeback: 0.0 };
+
+  let sumCombined = 0;
+  let countPairs = 0;
+  const len = members.length;
+
+  for (let i = 0; i < len; i++) {
+    for (let j = i + 1; j < len; j++) {
+      sumCombined += calcCombinedScore(members[i], members[j]);
+      countPairs++;
+    }
+  }
+
+  const avgCombined = countPairs > 0 ? sumCombined / countPairs : 50.0;
+  const { score: taskPotential, comeback } = calcTaskPotential(members, projectType);
+
+  // Synergy = 0.6 * AvgCombined + 0.4 * (TaskPotential * 20)
+  const rawSynergy = 0.6 * avgCombined + 0.4 * (taskPotential * 20);
+  const synergy = Math.round(rawSynergy);
+
+  return { synergy, taskPotential, comeback: comeback || 3.0 };
+}
+
+// 6. Esports RoV Match Engine
+export function calcRoVMatchCapability(
+  teamSynergy: number,
+  comeback: number,
+  opponentData: { element_fire_pct: number; aggression: number } | null,
+  teamMembers: SimProfile[]
+): { capability: number; counterIndex: number } {
+  let counterIndex = 0.50; // default neutral
+
+  if (opponentData) {
+    const isOpponentEarlySnowball = opponentData.element_fire_pct > 40 && opponentData.aggression > 3.0;
+    if (isOpponentEarlySnowball) {
+      let waterCount = 0;
+      let q2q3Count = 0;
+      teamMembers.forEach(m => {
+        if (m.chinese_element?.includes('Water') || m.thai_element === 'ธาตุน้ำ') waterCount++;
+        if (m.quadrant_primary === 'Q2' || m.quadrant_primary === 'Q3') q2q3Count++;
+      });
+
+      if (waterCount >= 1 || q2q3Count >= teamMembers.length / 2) {
+        counterIndex = 0.75;
+      }
+    }
+  }
+
+  const rawCap = 0.4 * teamSynergy + 0.3 * (comeback * 20) + 0.3 * (counterIndex * 100);
+  const capability = Math.round(rawCap);
+  return { capability, counterIndex };
+}
+
+// 7. Combat Sports individual Dominance
+export function calcCombatDominance(
+  fighter: SimProfile,
+  opponent: SimProfile | null
+): { dominance: number; egoPenalty: boolean; styleMultiplier: number; pressure: number } {
+  const r = fighter.kwi?.resilience ?? 3.0;
+  const m = fighter.kwi?.mastery ?? 3.0;
+  const n = fighter.score_n ?? 3.0;
+  const o = fighter.score_o ?? 3.0;
+
+  let fighterPsyCap = (r + m + (5 - n)) / 3;
+
+  // Ego Regulation Check (Delusion Penalty)
+  const isDelusive = (o >= 4.8 && n <= 1.5) || (fighter.jungian_type === 'TJ' && o >= 4.7 && n <= 1.8);
+  if (isDelusive) {
+    fighterPsyCap = fighterPsyCap * 0.85;
+  }
+
+  // Style Multiplier
+  let styleMultiplier = 1.0;
+  if (opponent) {
+    const isFighterWindCounter = fighter.quadrant_primary === 'Q2' || fighter.chinese_element?.includes('Water') || fighter.chinese_element?.includes('Metal') || fighter.chinese_element?.includes('Wood') || fighter.chinese_element?.includes('Wind') || fighter.thai_element === 'ธาตุลม';
+    const isOpponentFireSwarmer = opponent.quadrant_primary === 'Q4' || opponent.chinese_element?.includes('Fire') || opponent.thai_element === 'ธาตุไฟ';
+    if (isFighterWindCounter && isOpponentFireSwarmer) {
+      styleMultiplier = 1.2;
+    }
+  }
+
+  // Opponent Pressure
+  let pressure = 0.0;
+  if (opponent) {
+    const opponentAggression = opponent.delta_tilt?.aggression || 0.0;
+    pressure = (opponentAggression * n) / 5.0;
+  }
+
+  const rawDom = (fighterPsyCap * 20 * styleMultiplier) - (pressure * 10);
+  const dominance = Math.max(15, Math.min(98, Math.round(rawDom)));
+
+  return { dominance, egoPenalty: isDelusive, styleMultiplier, pressure };
+}
