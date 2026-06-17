@@ -117,6 +117,7 @@ interface Session {
 interface Assignment {
   user_id: string;
   group_number: number;
+  role?: string;
 }
 
 export default function AdminGroupsPage() {
@@ -152,6 +153,18 @@ export default function AdminGroupsPage() {
   const [rovHeroes, setRovHeroes] = useState<any[]>([]);
   const [selectedHeroIds, setSelectedHeroIds] = useState<Record<string, string>>({});
   const [oppHeroIds, setOppHeroIds] = useState<string[]>(['', '', '', '', '']);
+
+  // 🧘‍♀️ Executive AI Coach state
+  const [showExecChat, setShowExecChat] = useState(false);
+  const [execMessages, setExecMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [execInput, setExecInput] = useState('');
+  const [execLoading, setExecLoading] = useState(false);
+  const [execOptions, setExecOptions] = useState<string[]>([]);
+  
+  // Member management states inside group cards
+  const [addingMemberToGroup, setAddingMemberToGroup] = useState<number | null>(null);
+  const [editingRoleUserId, setEditingRoleUserId] = useState<string | null>(null);
+  const [customRoleInput, setCustomRoleInput] = useState<string>('');
 
   async function loadRovHeroes() {
     try {
@@ -416,7 +429,7 @@ export default function AdminGroupsPage() {
     try {
       const { data, error } = await supabase
         .from('group_assignments')
-        .select('user_id, group_number')
+        .select('user_id, group_number, role')
         .eq('session_id', selectedSessionId);
       if (error) throw error;
       setAssignments(data || []);
@@ -513,7 +526,8 @@ export default function AdminGroupsPage() {
         const rows = assignments.map(a => ({
           session_id: selectedSessionId,
           group_number: a.group_number,
-          user_id: a.user_id
+          user_id: a.user_id,
+          role: a.role || ''
         }));
 
         const { error: insErr } = await supabase
@@ -534,11 +548,80 @@ export default function AdminGroupsPage() {
     setAssignments(prev => {
       const filtered = prev.filter(a => a.user_id !== userId);
       if (groupNum > 0) {
-        return [...filtered, { user_id: userId, group_number: groupNum }].sort((a, b) => a.group_number - b.group_number);
+        const existing = prev.find(a => a.user_id === userId);
+        return [...filtered, { user_id: userId, group_number: groupNum, role: existing?.role || '' }].sort((a, b) => a.group_number - b.group_number);
       }
       return filtered;
     });
   }
+
+  function handleChangeMemberRole(userId: string, newRole: string) {
+    setAssignments(prev => prev.map(a => {
+      if (a.user_id === userId) {
+        return { ...a, role: newRole };
+      }
+      return a;
+    }));
+  }
+
+  const openExecChat = async () => {
+    setShowExecChat(true);
+    if (execMessages.length === 0) {
+      setExecLoading(true);
+      try {
+        const res = await fetch('/api/admin/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orgId: selectedOrgId || localStorage.getItem('kruth_admin_org_id'),
+            message: 'สวัสดีค่ะ ช่วยแนะนำตัววิเคราะห์สุขภาวะโดยรวมและให้ข้อเสนอแนะในการบริหารขององค์กรเราหน่อยค่ะ',
+            chatHistory: []
+          })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setExecMessages([
+            { role: 'assistant', content: data.replyText }
+          ]);
+          setExecOptions(data.options || []);
+        }
+      } catch (err) {
+        console.error("Failed to load exec chat greeting:", err);
+      } finally {
+        setExecLoading(false);
+      }
+    }
+  };
+
+  const sendExecMessage = async (msgText: string) => {
+    if (!msgText.trim()) return;
+    const orgId = selectedOrgId || localStorage.getItem('kruth_admin_org_id');
+    const newMessages = [...execMessages, { role: 'user' as const, content: msgText }];
+    setExecMessages(newMessages);
+    setExecInput('');
+    setExecLoading(true);
+
+    try {
+      const res = await fetch('/api/admin/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orgId,
+          message: msgText,
+          chatHistory: newMessages,
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setExecMessages(prev => [...prev, { role: 'assistant', content: data.replyText }]);
+        setExecOptions(data.options || []);
+      }
+    } catch (err) {
+      console.error("Failed to send exec message:", err);
+    } finally {
+      setExecLoading(false);
+    }
+  };
 
   function showMsg(text: string, type: 'success' | 'error') {
     setMessage({ text, type });
@@ -954,23 +1037,134 @@ export default function AdminGroupsPage() {
                             </div>
 
                             <div className="space-y-2">
-                              {groupPeers.map(m => (
-                                <div key={m.user_id} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg text-xs">
-                                  <div className="min-w-0">
-                                    <div className="font-bold text-gray-800 truncate">{m.full_name}</div>
-                                    <div className="text-[0.65rem] text-gray-400 truncate">
-                                      {m.archetype ? `${m.archetype} (${m.quadrant})` : 'ยังไม่ได้ทำแบบทดสอบ'}
+                              {groupPeers.map(m => {
+                                const assignment = assignments.find(a => a.user_id === m.user_id);
+                                const currentRole = assignment?.role || '';
+                                return (
+                                  <div key={m.user_id} className="flex flex-col bg-gray-50/70 p-2.5 rounded-xl text-xs space-y-1.5 border border-gray-100/50">
+                                    <div className="flex justify-between items-start">
+                                      <div className="min-w-0">
+                                        <div className="font-bold text-gray-800 truncate">{m.full_name}</div>
+                                        <div className="text-[0.65rem] text-gray-400 truncate">
+                                          {m.archetype ? `${m.archetype} (${m.quadrant})` : 'ยังไม่ได้ทำแบบทดสอบ'}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleManualChangeGroup(m.user_id, 0)}
+                                        className="text-red-500 hover:text-red-600 font-bold px-1.5 py-0.5 hover:bg-red-50 rounded"
+                                      >
+                                        ออก
+                                      </button>
+                                    </div>
+
+                                    {/* Duty/Role Selector & Custom Input */}
+                                    <div className="flex items-center gap-1.5 mt-1 border-t pt-1.5 border-gray-100/50">
+                                      <span className="text-[0.65rem] text-gray-400 font-semibold">หน้าที่:</span>
+                                      {editingRoleUserId === m.user_id ? (
+                                        <div className="flex items-center gap-1 flex-1">
+                                          <input
+                                            type="text"
+                                            value={customRoleInput}
+                                            onChange={(e) => setCustomRoleInput(e.target.value)}
+                                            placeholder="ระบุหน้าที่..."
+                                            className="border border-gray-300 rounded px-1.5 py-0.5 text-[0.65rem] outline-none flex-1 bg-white focus:border-[#1A3A5C]"
+                                            autoFocus
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              handleChangeMemberRole(m.user_id, customRoleInput);
+                                              setEditingRoleUserId(null);
+                                            }}
+                                            className="bg-emerald-500 text-white rounded px-1 py-0.5 hover:bg-emerald-600 text-[0.65rem] font-bold"
+                                            title="ตกลง"
+                                          >
+                                            ✓
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditingRoleUserId(null)}
+                                            className="bg-gray-200 text-gray-600 rounded px-1 py-0.5 hover:bg-gray-300 text-[0.65rem] font-bold"
+                                            title="ยกเลิก"
+                                          >
+                                            ✗
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center justify-between flex-1 gap-1">
+                                          <span className={`text-[0.65rem] font-bold px-1.5 py-0.5 rounded truncate max-w-[120px] ${
+                                            currentRole ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'text-gray-400 italic'
+                                          }`}>
+                                            {currentRole || 'ยังไม่กำหนดหน้าที่'}
+                                          </span>
+                                          <select
+                                            value={['👑 หัวหน้ากลุ่ม', '🎯 PM / Shot Caller', '🌱 Facilitator', '🤝 กรรมการร่วม', '🛡️ ผู้พิทักษ์กฎ', '📝 ผู้จดบันทึก'].includes(currentRole) ? currentRole : (currentRole ? 'custom' : '')}
+                                            onChange={(e) => {
+                                              if (e.target.value === 'custom') {
+                                                setCustomRoleInput(currentRole);
+                                                setEditingRoleUserId(m.user_id);
+                                              } else {
+                                                handleChangeMemberRole(m.user_id, e.target.value);
+                                              }
+                                            }}
+                                            className="border border-gray-200 rounded px-1 py-0.5 text-[0.65rem] outline-none bg-white text-gray-600 focus:border-[#1A3A5C]"
+                                          >
+                                            <option value="">— เลือกหน้าที่ —</option>
+                                            <option value="👑 หัวหน้ากลุ่ม">👑 หัวหน้ากลุ่ม</option>
+                                            <option value="🎯 PM / Shot Caller">🎯 PM / Shot Caller</option>
+                                            <option value="🌱 Facilitator">🌱 Facilitator</option>
+                                            <option value="🤝 กรรมการร่วม">🤝 กรรมการร่วม</option>
+                                            <option value="🛡️ ผู้พิทักษ์กฎ">🛡️ ผู้พิทักษ์กฎ</option>
+                                            <option value="📝 ผู้จดบันทึก">📝 ผู้จดบันทึก</option>
+                                            <option value="custom">✍️ กำหนดเอง...</option>
+                                          </select>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
-                                  <button
-                                    onClick={() => handleManualChangeGroup(m.user_id, 0)}
-                                    className="text-red-500 hover:text-red-600 font-bold px-2 py-1"
-                                  >
-                                    ออก
-                                  </button>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
+
+                            {/* Add/Select Member Dropdown */}
+                            {addingMemberToGroup === groupNo ? (
+                              <div className="flex gap-2 items-center mt-2 border-t pt-2 border-dashed border-gray-100">
+                                <select
+                                  className="border rounded px-2 py-1 text-xs outline-none focus:border-[#1A3A5C] flex-1 bg-white text-gray-700"
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      handleManualChangeGroup(e.target.value, groupNo);
+                                      setAddingMemberToGroup(null);
+                                    }
+                                  }}
+                                  defaultValue=""
+                                >
+                                  <option value="" disabled>— เลือกสมาชิกที่จะเพิ่ม —</option>
+                                  {unassignedMembers.map(um => (
+                                    <option key={um.user_id} value={um.user_id}>{um.full_name}</option>
+                                  ))}
+                                  {unassignedMembers.length === 0 && (
+                                    <option disabled>ไม่มีสมาชิกที่ว่าง</option>
+                                  )}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => setAddingMemberToGroup(null)}
+                                  className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-0.5 font-semibold"
+                                >
+                                  ยกเลิก
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setAddingMemberToGroup(groupNo)}
+                                className="w-full mt-2 py-1.5 border border-dashed border-blue-200 hover:border-blue-400 text-blue-600 hover:bg-blue-50/30 rounded-xl text-[0.7rem] font-bold transition-all flex items-center justify-center gap-1"
+                              >
+                                <span>➕</span> เพิ่มหรือเลือกสมาชิก
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => setAnalyzingGroupNo(groupNo)}
@@ -1618,6 +1812,107 @@ export default function AdminGroupsPage() {
         })()}
 
       </div>
+
+      {/* 🧘‍♀️ EXECUTIVE AI COACH FLOATING CHAT WIDGET */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        {/* Chat Panel */}
+        {showExecChat && (
+          <div className="bg-white/95 border border-gray-100 shadow-2xl rounded-2xl w-[90vw] max-w-md h-[500px] flex flex-col mb-4 overflow-hidden animate-fade-in text-left">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#1A3A5C] to-[#1D8B75] text-white p-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">💼</span>
+                <div>
+                  <h3 className="font-bold text-sm">Executive AI Coach</h3>
+                  <p className="text-[0.65rem] text-teal-100">ผู้แนะนำการบริหารและดูแลสุขภาวะองค์กร</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowExecChat(false)} className="text-white/80 hover:text-white text-xl">✕</button>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+              {execMessages.map((msg, index) => (
+                <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                  <div className={`max-w-[85%] rounded-2xl p-3.5 text-xs md:text-sm leading-relaxed text-left ${
+                    msg.role === 'user'
+                      ? 'bg-[#1A3A5C] text-white rounded-tr-none'
+                      : 'bg-white text-gray-700 shadow-sm border border-gray-100 rounded-tl-none'
+                  }`}>
+                    {msg.role !== 'user' && (
+                      <div className="flex justify-between items-center mb-1 gap-2 border-b border-gray-150 pb-1">
+                        <span className="font-bold text-[0.65rem] text-[#1D8B75]">Executive AI Coach</span>
+                      </div>
+                    )}
+                    {msg.content.split('\n').map((line, idx) => (
+                      <span key={idx} className="block mt-0.5">{line}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {execLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white text-gray-400 shadow-sm border rounded-2xl p-3 text-xs flex items-center gap-2">
+                    <span className="animate-pulse">● ● ●</span> บอทกำลังประมวลสถิติและคำตอบ...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Suggestions */}
+            {execOptions.length > 0 && !execLoading && (
+              <div className="px-4 py-2 bg-white border-t flex flex-wrap gap-2 overflow-x-auto">
+                {execOptions.map((opt, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => sendExecMessage(opt)}
+                    className="text-xs bg-blue-50 hover:bg-blue-100 border border-blue-100 text-[#1A3A5C] px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap"
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Input Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                sendExecMessage(execInput);
+              }}
+              className="p-3 bg-white border-t flex gap-2"
+            >
+              <input
+                type="text"
+                value={execInput}
+                onChange={(e) => setExecInput(e.target.value)}
+                disabled={execLoading}
+                placeholder="ปรึกษาการบริหารองค์กร/จัดกิจกรรมทีม..."
+                className="flex-1 px-3.5 py-2 border border-gray-200 rounded-xl text-xs md:text-sm focus:outline-none focus:border-[#1D8B75] disabled:bg-gray-50"
+              />
+              <button
+                type="submit"
+                disabled={execLoading || !execInput.trim()}
+                className="px-4 py-2 bg-[#1A3A5C] hover:bg-[#2E75B6] disabled:bg-gray-200 text-white rounded-xl text-xs font-bold transition-colors"
+              >
+                ส่ง
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Floating Bubble Button */}
+        <button
+          type="button"
+          onClick={openExecChat}
+          className="flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-[#1A3A5C] to-[#1D8B75] text-white shadow-xl hover:scale-105 transition-transform font-bold text-xs md:text-sm"
+        >
+          <span className="text-base">💼</span> ปรึกษา Executive AI Coach
+        </button>
+      </div>
+
     </div>
   );
 }
