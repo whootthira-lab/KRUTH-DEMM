@@ -5,6 +5,59 @@ import { supabase } from '@/lib/supabase';
 // นำเข้าแพ็กเกจสำหรับวาดกราฟ
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
+interface LevelBarProps {
+  label: string;
+  counts: Record<string, number>;
+  total: number;
+}
+
+function LevelBar({ label, counts, total }: LevelBarProps) {
+  const green = counts['🟢'] || 0;
+  const yellow = counts['🟡'] || 0;
+  const orange = counts['🟠'] || 0;
+  const red = counts['🔴'] || 0;
+
+  const pctG = total > 0 ? Math.round((green / total) * 100) : 0;
+  const pctY = total > 0 ? Math.round((yellow / total) * 100) : 0;
+  const pctO = total > 0 ? Math.round((orange / total) * 100) : 0;
+  const pctR = total > 0 ? Math.round((red / total) * 100) : 0;
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-4 space-y-3 shadow-sm text-left">
+      <div className="flex justify-between items-center">
+        <span className="text-xs font-bold text-gray-800">{label}</span>
+        <span className="text-[10px] text-gray-400">ผู้ประเมิน {total} คน</span>
+      </div>
+      
+      <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden flex">
+        {pctG > 0 && <div className="bg-emerald-500 h-full" style={{ width: `${pctG}%` }} title={`ปกติ/เสี่ยงต่ำ: ${pctG}%`} />}
+        {pctY > 0 && <div className="bg-amber-400 h-full" style={{ width: `${pctY}%` }} title={`เฝ้าระวัง: ${pctY}%`} />}
+        {pctO > 0 && <div className="bg-orange-500 h-full" style={{ width: `${pctO}%` }} title={`เสี่ยงสูง: ${pctO}%`} />}
+        {pctR > 0 && <div className="bg-rose-600 h-full" style={{ width: `${pctR}%` }} title={`เสี่ยงวิกฤต: ${pctR}%`} />}
+      </div>
+
+      <div className="grid grid-cols-4 gap-1 text-[8px] font-bold text-gray-500">
+        <div className="flex flex-col items-center border-r border-gray-100">
+          <span className="text-emerald-600">🟢 ปกติ</span>
+          <span>{green} ({pctG}%)</span>
+        </div>
+        <div className="flex flex-col items-center border-r border-gray-100">
+          <span className="text-amber-500">🟡 ระวัง</span>
+          <span>{yellow} ({pctY}%)</span>
+        </div>
+        <div className="flex flex-col items-center border-r border-gray-100">
+          <span className="text-orange-500">🟠 เสี่ยง</span>
+          <span>{orange} ({pctO}%)</span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className="text-rose-600">🔴 วิกฤต</span>
+          <span>{red} ({pctR}%)</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -14,7 +67,6 @@ export default function AdminDashboard() {
   const [topArchetypes, setTopArchetypes] = useState<any[]>([]);
   const [recentUsers, setRecentUsers] = useState<any[]>([]);
   
-  // 🚨 ตัวแปรใหม่สำหรับเก็บข้อมูลวิเคราะห์รายข้อ (Item Analysis)
   const [slowestQuestions, setSlowestQuestions] = useState<any[]>([]);
   const [fastestQuestions, setFastestQuestions] = useState<any[]>([]);
 
@@ -24,7 +76,21 @@ export default function AdminDashboard() {
   const [execInput, setExecInput] = useState('');
   const [execLoading, setExecLoading] = useState(false);
   const [execOptions, setExecOptions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  // 🧠 Wellness & Risk States
+  const [kwiData, setKwiData] = useState<any[]>([]);
+  const [clinicalStats, setClinicalStats] = useState<any>({
+    rain: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    bolt: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    fog: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    socialanxiety: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    ocd: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    burnout: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    adhd: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+    delusion: { '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 },
+  });
 
   // 📋 States for Management Recommendation Feedback & Evaluation
   const [membersList, setMembersList] = useState<any[]>([]);
@@ -318,6 +384,74 @@ export default function AdminDashboard() {
         }
       }
 
+      // 7.2 Fetch KWI responses
+      const { data: kwiResponses } = await supabase
+        .from('kwi_responses')
+        .select('vitality, meaning, connection, mastery, resilience')
+        .in('user_id', userIds);
+
+      if (kwiResponses && kwiResponses.length > 0) {
+        const sum = kwiResponses.reduce((acc, curr) => ({
+          v: acc.v + (curr.vitality || 0),
+          m: acc.m + (curr.meaning || 0),
+          c: acc.c + (curr.connection || 0),
+          a: acc.a + (curr.mastery || 0),
+          r: acc.r + (curr.resilience || 0),
+        }), { v: 0, m: 0, c: 0, a: 0, r: 0 });
+
+        const len = kwiResponses.length;
+        setKwiData([
+          { name: 'พลังชีวิต', score: Math.round((sum.v / len) * 10) / 10 },
+          { name: 'ความหมาย', score: Math.round((sum.m / len) * 10) / 10 },
+          { name: 'สายสัมพันธ์', score: Math.round((sum.c / len) * 10) / 10 },
+          { name: 'การเติบโต', score: Math.round((sum.a / len) * 10) / 10 },
+          { name: 'ยืดหยุ่นลุกเร็ว', score: Math.round((sum.r / len) * 10) / 10 },
+        ]);
+      } else {
+        setKwiData([]);
+      }
+
+      // 7.5 Fetch category_flags
+      const { data: flags } = await supabase
+        .from('category_flags')
+        .select('user_id, rain_level, bolt_level, fog_level, bright_flag, bright_type, socialanxiety_level, ocd_level, burnout_level, adhd_level, delusion_level')
+        .in('user_id', userIds);
+
+      const initCounts = () => ({ '🟢': 0, '🟡': 0, '🟠': 0, '🔴': 0 });
+      const clinCounts: Record<string, Record<string, number>> = {
+        rain: initCounts(),
+        bolt: initCounts(),
+        fog: initCounts(),
+        socialanxiety: initCounts(),
+        ocd: initCounts(),
+        burnout: initCounts(),
+        adhd: initCounts(),
+        delusion: initCounts(),
+      };
+
+      const mapLevelToEmoji = (lvl: string | null): '🟢' | '🟡' | '🟠' | '🔴' => {
+        if (!lvl) return '🟢';
+        const clean = lvl.trim();
+        if (clean === '🔴') return '🔴';
+        if (clean === '🟠') return '🟠';
+        if (clean === '🟡') return '🟡';
+        if (clean === '🟢') return '🟢';
+        return '🟢';
+      };
+
+      (flags || []).forEach(f => {
+        clinCounts.rain[mapLevelToEmoji(f.rain_level)]++;
+        clinCounts.bolt[mapLevelToEmoji(f.bolt_level)]++;
+        clinCounts.fog[mapLevelToEmoji(f.fog_level)]++;
+        clinCounts.socialanxiety[mapLevelToEmoji(f.socialanxiety_level)]++;
+        clinCounts.ocd[mapLevelToEmoji(f.ocd_level)]++;
+        clinCounts.burnout[mapLevelToEmoji(f.burnout_level)]++;
+        clinCounts.adhd[mapLevelToEmoji(f.adhd_level)]++;
+        clinCounts.delusion[mapLevelToEmoji(f.delusion_level)]++;
+      });
+
+      setClinicalStats(clinCounts);
+
       // 8. Fetch individual member profiles for team building and coaching dropdown
       const { data: memberProfiles } = await supabase
         .from('results')
@@ -433,6 +567,79 @@ export default function AdminDashboard() {
             </div>
           </div>
         </div>
+
+        {/* 🧘‍♂️ มิติสุขภาวะ KWI & สัญญาณความเสี่ยงจิตวิทยา */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
+          <div className="border-b pb-4">
+            <h3 className="font-bold text-[#1A3A5C] text-lg">📊 ดัชนีสุขภาวะและสัญญาณระวังภัย (Wellbeing & Risk Indicators)</h3>
+            <p className="text-xs text-gray-500">ข้อมูลวิเคราะห์ระดับสุขภาวะ KWI และระดับความเสี่ยงของสมาชิกในหน่วยงาน</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* KWI Averages Chart */}
+            <div className="lg:col-span-2 border border-gray-100 rounded-2xl p-4 flex flex-col justify-between">
+              <h4 className="font-bold text-sm text-[#1A3A5C] mb-4">📈 ค่าเฉลี่ยสุขภาวะ KWI (KWI Dimensions)</h4>
+              <div className="w-full h-72">
+                {kwiData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={kwiData} margin={{ bottom: 20 }}>
+                      <XAxis dataKey="name" stroke="#6b7280" fontSize={10} tickLine={false} />
+                      <YAxis domain={[0, 5]} stroke="#6b7280" fontSize={11} tickLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', borderRadius: '12px' }} />
+                      <Bar dataKey="score" radius={[8, 8, 0, 0]}>
+                        {kwiData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-xs text-gray-400">ยังไม่มีข้อมูลสุขภาวะหน่วยงานนี้</div>
+                )}
+              </div>
+            </div>
+
+            {/* Stacked Risk Chart */}
+            <div className="border border-gray-100 rounded-2xl p-4 flex flex-col justify-between">
+              <h4 className="font-bold text-sm text-[#1A3A5C] mb-4">⚠️ สรุปความรุนแรงของสัญญาณเสี่ยง</h4>
+              <div className="w-full h-72">
+                {stats.total > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[
+                      { name: 'ซึมเศร้า', '🟢 ปกติ': clinicalStats.rain['🟢'], '🟡 เฝ้าระวัง': clinicalStats.rain['🟡'], '🟠 เสี่ยงสูง': clinicalStats.rain['🟠'], '🔴 วิกฤต': clinicalStats.rain['🔴'] },
+                      { name: 'ก้าวร้าว', '🟢 ปกติ': clinicalStats.bolt['🟢'], '🟡 เฝ้าระวัง': clinicalStats.bolt['🟡'], '🟠 เสี่ยงสูง': clinicalStats.bolt['🟠'], '🔴 วิกฤต': clinicalStats.bolt['🔴'] },
+                      { name: 'ถดถอย', '🟢 ปกติ': clinicalStats.fog['🟢'], '🟡 เฝ้าระวัง': clinicalStats.fog['🟡'], '🟠 เสี่ยงสูง': clinicalStats.fog['🟠'], '🔴 วิกฤต': clinicalStats.fog['🔴'] },
+                      { name: 'หมดไฟ', '🟢 ปกติ': clinicalStats.burnout['🟢'], '🟡 เฝ้าระวัง': clinicalStats.burnout['🟡'], '🟠 เสี่ยงสูง': clinicalStats.burnout['🟠'], '🔴 วิกฤต': clinicalStats.burnout['🔴'] }
+                    ]} margin={{ bottom: 10, top: 10 }}>
+                      <XAxis dataKey="name" stroke="#6b7280" fontSize={9} tickLine={false} />
+                      <YAxis stroke="#6b7280" fontSize={10} tickLine={false} />
+                      <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', borderRadius: '12px' }} />
+                      <Bar dataKey="🟢 ปกติ" stackId="a" fill="#10B981" />
+                      <Bar dataKey="🟡 เฝ้าระวัง" stackId="a" fill="#F59E0B" />
+                      <Bar dataKey="🟠 เสี่ยงสูง" stackId="a" fill="#F97316" />
+                      <Bar dataKey="🔴 วิกฤต" stackId="a" fill="#EF4444" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-xs text-gray-400">ยังไม่มีข้อมูลสัญญาณความเสี่ยง</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Level Bars detailed grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+            <LevelBar label="🌧️ ซึมเศร้า (Rain)" counts={clinicalStats.rain} total={stats.total} />
+            <LevelBar label="⚡ ก้าวร้าว (Bolt)" counts={clinicalStats.bolt} total={stats.total} />
+            <LevelBar label="🌫️ ถดถอย (Fog)" counts={clinicalStats.fog} total={stats.total} />
+            <LevelBar label="👥 วิตกกังวลสังคม (Social Anxiety)" counts={clinicalStats.socialanxiety} total={stats.total} />
+            <LevelBar label="⏳ ย้ำคิดย้ำทำ (OCD)" counts={clinicalStats.ocd} total={stats.total} />
+            <LevelBar label="🔥 หมดไฟทำงาน (Burnout)" counts={clinicalStats.burnout} total={stats.total} />
+            <LevelBar label="🎯 สมาธิสั้น (ADHD)" counts={clinicalStats.adhd} total={stats.total} />
+            <LevelBar label="🌀 ความหลงผิด (Delusion)" counts={clinicalStats.delusion} total={stats.total} />
+          </div>
+        </div>
+
 
         {/* 🚨 ใหม่: Item Analysis Section (ข้อที่คิดนาน vs ตอบเร็ว) */}
         <div className="grid md:grid-cols-2 gap-6">
@@ -868,17 +1075,41 @@ export default function AdminDashboard() {
             </div>
 
             {/* Quick Suggestions */}
-            {execOptions.length > 0 && !execLoading && (
-              <div className="px-4 py-2 bg-white border-t flex flex-wrap gap-2 overflow-x-auto">
+            {showSuggestions && execOptions.length > 0 && !execLoading && (
+              <div className="px-4 py-2 bg-white border-t flex flex-wrap gap-2 overflow-x-auto relative">
+                <div className="w-full flex justify-between items-center mb-1 text-[10px] text-gray-400 font-semibold">
+                  <span>💡 คำถามแนะนำ</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowSuggestions(false)}
+                    className="hover:text-red-500 transition-colors"
+                  >
+                    ซ่อน ✕
+                  </button>
+                </div>
                 {execOptions.map((opt, i) => (
                   <button
                     key={i}
+                    type="button"
                     onClick={() => sendExecMessage(opt)}
                     className="text-xs bg-blue-50 hover:bg-blue-100 border border-blue-100 text-[#1A3A5C] px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap"
                   >
                     {opt}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Indicator to show suggestions when hidden */}
+            {!showSuggestions && execOptions.length > 0 && !execLoading && (
+              <div className="px-4 py-1 bg-white border-t flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions(true)}
+                  className="text-[10px] text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                >
+                  💡 แสดงคำถามแนะนำ
+                </button>
               </div>
             )}
 

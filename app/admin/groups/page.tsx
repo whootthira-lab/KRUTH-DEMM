@@ -160,6 +160,7 @@ export default function AdminGroupsPage() {
   const [execInput, setExecInput] = useState('');
   const [execLoading, setExecLoading] = useState(false);
   const [execOptions, setExecOptions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(true);
   
   // Member management states inside group cards
   const [addingMemberToGroup, setAddingMemberToGroup] = useState<number | null>(null);
@@ -906,10 +907,10 @@ export default function AdminGroupsPage() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid lg:grid-cols-3 gap-6">
           
           {/* Left Column: Organization & Session selector */}
-          <div className="space-y-6 md:col-span-1">
+          <div className="space-y-6 lg:col-span-1">
             
             {/* Org Selector */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
@@ -979,7 +980,7 @@ export default function AdminGroupsPage() {
           </div>
 
           {/* Right Columns: Members and Subgroups */}
-          <div className="md:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6">
             
             {selectedOrgId ? (
               <>
@@ -1861,8 +1862,18 @@ export default function AdminGroupsPage() {
             </div>
 
             {/* Quick Suggestions */}
-            {execOptions.length > 0 && !execLoading && (
-              <div className="px-4 py-2 bg-white border-t flex flex-wrap gap-2 overflow-x-auto">
+            {showSuggestions && execOptions.length > 0 && !execLoading && (
+              <div className="px-4 py-2 bg-white border-t flex flex-wrap gap-2 overflow-x-auto relative">
+                <div className="w-full flex justify-between items-center mb-1 text-[10px] text-gray-400 font-semibold">
+                  <span>💡 คำถามแนะนำ</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowSuggestions(false)}
+                    className="hover:text-red-500 transition-colors"
+                  >
+                    ซ่อน ✕
+                  </button>
+                </div>
                 {execOptions.map((opt, i) => (
                   <button
                     key={i}
@@ -1873,6 +1884,19 @@ export default function AdminGroupsPage() {
                     {opt}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Indicator to show suggestions when hidden */}
+            {!showSuggestions && execOptions.length > 0 && !execLoading && (
+              <div className="px-4 py-1 bg-white border-t flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions(true)}
+                  className="text-[10px] text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                >
+                  💡 แสดงคำถามแนะนำ
+                </button>
               </div>
             )}
 

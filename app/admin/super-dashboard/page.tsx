@@ -109,6 +109,7 @@ export default function SuperDashboard() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatOptions, setChatOptions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(true);
 
   // 📋 States for Management Recommendation Feedback & Evaluation
   const [membersList, setMembersList] = useState<any[]>([]);
@@ -1366,17 +1367,41 @@ export default function SuperDashboard() {
             </div>
 
             {/* Suggestions */}
-            {chatOptions.length > 0 && !chatLoading && (
-              <div className="px-4 py-2 bg-slate-900/80 border-t border-slate-800 flex flex-wrap gap-2 overflow-x-auto">
+            {showSuggestions && chatOptions.length > 0 && !chatLoading && (
+              <div className="px-4 py-2 bg-slate-900/80 border-t border-slate-800 flex flex-wrap gap-2 overflow-x-auto relative">
+                <div className="w-full flex justify-between items-center mb-1 text-[10px] text-slate-400 font-semibold">
+                  <span>💡 คำถามแนะนำ</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowSuggestions(false)}
+                    className="hover:text-red-400 transition-colors"
+                  >
+                    ซ่อน ✕
+                  </button>
+                </div>
                 {chatOptions.map((opt, i) => (
                   <button
                     key={i}
+                    type="button"
                     onClick={() => sendChatMessage(opt)}
                     className="text-xs bg-teal-950/40 hover:bg-teal-900/40 border border-teal-900/30 text-teal-400 px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap"
                   >
                     {opt}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Indicator to show suggestions when hidden */}
+            {!showSuggestions && chatOptions.length > 0 && !chatLoading && (
+              <div className="px-4 py-1 bg-slate-900/80 border-t border-slate-800 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions(true)}
+                  className="text-[10px] text-teal-400 hover:underline flex items-center gap-1 font-semibold"
+                >
+                  💡 แสดงคำถามแนะนำ
+                </button>
               </div>
             )}
 
