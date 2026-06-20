@@ -602,18 +602,23 @@ export default function AdminDashboard() {
             {/* Stacked Risk Chart */}
             <div className="border border-gray-100 rounded-2xl p-4 flex flex-col justify-between">
               <h4 className="font-bold text-sm text-[#1A3A5C] mb-4">⚠️ สรุปความรุนแรงของสัญญาณเสี่ยง</h4>
-              <div className="w-full h-72">
+              <div className="w-full h-96">
                 {stats.total > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[
+                    <BarChart layout="vertical" data={[
                       { name: 'ซึมเศร้า', '🟢 ปกติ': clinicalStats.rain['🟢'], '🟡 เฝ้าระวัง': clinicalStats.rain['🟡'], '🟠 เสี่ยงสูง': clinicalStats.rain['🟠'], '🔴 วิกฤต': clinicalStats.rain['🔴'] },
                       { name: 'ก้าวร้าว', '🟢 ปกติ': clinicalStats.bolt['🟢'], '🟡 เฝ้าระวัง': clinicalStats.bolt['🟡'], '🟠 เสี่ยงสูง': clinicalStats.bolt['🟠'], '🔴 วิกฤต': clinicalStats.bolt['🔴'] },
                       { name: 'ถดถอย', '🟢 ปกติ': clinicalStats.fog['🟢'], '🟡 เฝ้าระวัง': clinicalStats.fog['🟡'], '🟠 เสี่ยงสูง': clinicalStats.fog['🟠'], '🔴 วิกฤต': clinicalStats.fog['🔴'] },
-                      { name: 'หมดไฟ', '🟢 ปกติ': clinicalStats.burnout['🟢'], '🟡 เฝ้าระวัง': clinicalStats.burnout['🟡'], '🟠 เสี่ยงสูง': clinicalStats.burnout['🟠'], '🔴 วิกฤต': clinicalStats.burnout['🔴'] }
-                    ]} margin={{ bottom: 10, top: 10 }}>
-                      <XAxis dataKey="name" stroke="#6b7280" fontSize={9} tickLine={false} />
-                      <YAxis stroke="#6b7280" fontSize={10} tickLine={false} />
+                      { name: 'กังวลสังคม', '🟢 ปกติ': clinicalStats.socialanxiety['🟢'], '🟡 เฝ้าระวัง': clinicalStats.socialanxiety['🟡'], '🟠 เสี่ยงสูง': clinicalStats.socialanxiety['🟠'], '🔴 วิกฤต': clinicalStats.socialanxiety['🔴'] },
+                      { name: 'ย้ำคิดย้ำทำ', '🟢 ปกติ': clinicalStats.ocd['🟢'], '🟡 เฝ้าระวัง': clinicalStats.ocd['🟡'], '🟠 เสี่ยงสูง': clinicalStats.ocd['🟠'], '🔴 วิกฤต': clinicalStats.ocd['🔴'] },
+                      { name: 'หมดไฟ', '🟢 ปกติ': clinicalStats.burnout['🟢'], '🟡 เฝ้าระวัง': clinicalStats.burnout['🟡'], '🟠 เสี่ยงสูง': clinicalStats.burnout['🟠'], '🔴 วิกฤต': clinicalStats.burnout['🔴'] },
+                      { name: 'สมาธิสั้น', '🟢 ปกติ': clinicalStats.adhd['🟢'], '🟡 เฝ้าระวัง': clinicalStats.adhd['🟡'], '🟠 เสี่ยงสูง': clinicalStats.adhd['🟠'], '🔴 วิกฤต': clinicalStats.adhd['🔴'] },
+                      { name: 'หลงผิด', '🟢 ปกติ': clinicalStats.delusion['🟢'], '🟡 เฝ้าระวัง': clinicalStats.delusion['🟡'], '🟠 เสี่ยงสูง': clinicalStats.delusion['🟠'], '🔴 วิกฤต': clinicalStats.delusion['🔴'] }
+                    ]} margin={{ left: 10, right: 10, top: 10, bottom: 10 }}>
+                      <XAxis type="number" stroke="#6b7280" fontSize={9} tickLine={false} />
+                      <YAxis dataKey="name" type="category" stroke="#6b7280" fontSize={9} tickLine={false} width={80} />
                       <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb', borderRadius: '12px' }} />
+                      <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                       <Bar dataKey="🟢 ปกติ" stackId="a" fill="#10B981" />
                       <Bar dataKey="🟡 เฝ้าระวัง" stackId="a" fill="#F59E0B" />
                       <Bar dataKey="🟠 เสี่ยงสูง" stackId="a" fill="#F97316" />

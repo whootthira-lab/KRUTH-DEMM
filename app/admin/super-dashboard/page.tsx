@@ -893,9 +893,9 @@ export default function SuperDashboard() {
             <div className="w-full h-96">
               {stats.totalUsers > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={clinicalChartData} margin={{ bottom: 10, top: 10 }}>
-                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <BarChart layout="vertical" data={clinicalChartData} margin={{ left: 10, right: 10, top: 10, bottom: 10 }}>
+                    <XAxis type="number" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                    <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} tickLine={false} width={80} />
                     <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }} />
                     <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
                     <Bar dataKey="🟢 ปกติ" stackId="a" fill="#10B981" />
