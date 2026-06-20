@@ -31,37 +31,40 @@ function LevelBar({ label, counts, total }: LevelBarProps) {
   const pctR = total > 0 ? Math.round((red / total) * 100) : 0;
 
   return (
-    <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 backdrop-blur-md shadow-lg">
-      <div className="flex justify-between items-center">
-        <span className="text-xs font-bold text-slate-200">{label}</span>
-        <span className="text-[10px] text-slate-400">ผู้ประเมิน {total} คน</span>
+    <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 backdrop-blur-md shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Label and Total */}
+      <div className="flex flex-row md:flex-col md:items-start justify-between items-center w-full md:w-1/4 lg:w-1/5 shrink-0 border-b md:border-b-0 md:border-r border-slate-800/80 pb-2 md:pb-0 md:pr-4">
+        <span className="text-sm font-bold text-slate-200">{label}</span>
+        <span className="text-[10px] text-slate-400 md:mt-1">ผู้ประเมิน {total} คน</span>
       </div>
-      
+
       {/* Stacked bar */}
-      <div className="h-3 w-full bg-slate-950 rounded-full overflow-hidden flex">
-        {pctG > 0 && <div className="bg-emerald-500 h-full" style={{ width: `${pctG}%` }} title={`ปกติ/เสี่ยงต่ำ: ${pctG}%`} />}
-        {pctY > 0 && <div className="bg-amber-400 h-full" style={{ width: `${pctY}%` }} title={`เฝ้าระวัง: ${pctY}%`} />}
-        {pctO > 0 && <div className="bg-orange-500 h-full" style={{ width: `${pctO}%` }} title={`เสี่ยงสูง: ${pctO}%`} />}
-        {pctR > 0 && <div className="bg-rose-600 h-full" style={{ width: `${pctR}%` }} title={`เสี่ยงวิกฤต: ${pctR}%`} />}
+      <div className="flex-1 w-full flex flex-col justify-center px-1">
+        <div className="h-3.5 w-full bg-slate-950 rounded-full overflow-hidden flex shadow-inner">
+          {pctG > 0 && <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${pctG}%` }} title={`ปกติ/เสี่ยงต่ำ: ${pctG}%`} />}
+          {pctY > 0 && <div className="bg-amber-400 h-full transition-all duration-500" style={{ width: `${pctY}%` }} title={`เฝ้าระวัง: ${pctY}%`} />}
+          {pctO > 0 && <div className="bg-orange-500 h-full transition-all duration-500" style={{ width: `${pctO}%` }} title={`เสี่ยงสูง: ${pctO}%`} />}
+          {pctR > 0 && <div className="bg-rose-600 h-full transition-all duration-500" style={{ width: `${pctR}%` }} title={`เสี่ยงวิกฤต: ${pctR}%`} />}
+        </div>
       </div>
 
       {/* Legend with counts & percentages */}
-      <div className="grid grid-cols-4 gap-1 text-[8.5px] font-bold text-slate-300">
+      <div className="w-full md:w-2/5 lg:w-1/3 shrink-0 grid grid-cols-4 gap-1 text-[11px] font-bold text-slate-300 md:pl-4">
         <div className="flex flex-col items-center border-r border-slate-800/80">
-          <span className="text-emerald-400">🟢 ปกติ</span>
-          <span>{green} ({pctG}%)</span>
+          <span className="text-emerald-400 text-xs">🟢 ปกติ</span>
+          <span className="mt-0.5 text-slate-200">{green} <span className="text-[10px] font-normal text-slate-400">({pctG}%)</span></span>
         </div>
         <div className="flex flex-col items-center border-r border-slate-800/80">
-          <span className="text-amber-400">🟡 ระวัง</span>
-          <span>{yellow} ({pctY}%)</span>
+          <span className="text-amber-400 text-xs">🟡 ระวัง</span>
+          <span className="mt-0.5 text-slate-200">{yellow} <span className="text-[10px] font-normal text-slate-400">({pctY}%)</span></span>
         </div>
         <div className="flex flex-col items-center border-r border-slate-800/80">
-          <span className="text-orange-400">🟠 เสี่ยงสูง</span>
-          <span>{orange} ({pctO}%)</span>
+          <span className="text-orange-400 text-xs">🟠 เสี่ยงสูง</span>
+          <span className="mt-0.5 text-slate-200">{orange} <span className="text-[10px] font-normal text-slate-400">({pctO}%)</span></span>
         </div>
         <div className="flex flex-col items-center">
-          <span className="text-rose-500">🔴 วิกฤต</span>
-          <span>{red} ({pctR}%)</span>
+          <span className="text-rose-500 text-xs">🔴 วิกฤต</span>
+          <span className="mt-0.5 text-slate-200">{red} <span className="text-[10px] font-normal text-slate-400">({pctR}%)</span></span>
         </div>
       </div>
     </div>
@@ -910,7 +913,7 @@ export default function SuperDashboard() {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 gap-4">
             <LevelBar label="🌧️ ซึมเศร้า (Rain)" counts={clinicalStats.rain} total={stats.totalUsers} />
             <LevelBar label="⚡ ก้าวร้าว (Aggressive/Bolt)" counts={clinicalStats.bolt} total={stats.totalUsers} />
             <LevelBar label="🌫️ ถดถอย (Regression/Fog)" counts={clinicalStats.fog} total={stats.totalUsers} />

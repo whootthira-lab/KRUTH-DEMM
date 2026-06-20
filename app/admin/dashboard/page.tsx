@@ -23,35 +23,40 @@ function LevelBar({ label, counts, total }: LevelBarProps) {
   const pctR = total > 0 ? Math.round((red / total) * 100) : 0;
 
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-4 space-y-3 shadow-sm text-left">
-      <div className="flex justify-between items-center">
-        <span className="text-xs font-bold text-gray-800">{label}</span>
-        <span className="text-[10px] text-gray-400">ผู้ประเมิน {total} คน</span>
-      </div>
-      
-      <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden flex">
-        {pctG > 0 && <div className="bg-emerald-500 h-full" style={{ width: `${pctG}%` }} title={`ปกติ/เสี่ยงต่ำ: ${pctG}%`} />}
-        {pctY > 0 && <div className="bg-amber-400 h-full" style={{ width: `${pctY}%` }} title={`เฝ้าระวัง: ${pctY}%`} />}
-        {pctO > 0 && <div className="bg-orange-500 h-full" style={{ width: `${pctO}%` }} title={`เสี่ยงสูง: ${pctO}%`} />}
-        {pctR > 0 && <div className="bg-rose-600 h-full" style={{ width: `${pctR}%` }} title={`เสี่ยงวิกฤต: ${pctR}%`} />}
+    <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-left flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Label and Total */}
+      <div className="flex flex-row md:flex-col md:items-start justify-between items-center w-full md:w-1/4 lg:w-1/5 shrink-0 border-b md:border-b-0 md:border-r border-gray-100 pb-2 md:pb-0 md:pr-4">
+        <span className="text-sm font-bold text-gray-800">{label}</span>
+        <span className="text-[10px] text-gray-400 md:mt-1">ผู้ประเมิน {total} คน</span>
       </div>
 
-      <div className="grid grid-cols-4 gap-1 text-[8px] font-bold text-gray-500">
+      {/* Stacked bar */}
+      <div className="flex-1 w-full flex flex-col justify-center px-1">
+        <div className="h-3.5 w-full bg-gray-50 rounded-full overflow-hidden flex shadow-inner">
+          {pctG > 0 && <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${pctG}%` }} title={`ปกติ/เสี่ยงต่ำ: ${pctG}%`} />}
+          {pctY > 0 && <div className="bg-amber-400 h-full transition-all duration-500" style={{ width: `${pctY}%` }} title={`เฝ้าระวัง: ${pctY}%`} />}
+          {pctO > 0 && <div className="bg-orange-500 h-full transition-all duration-500" style={{ width: `${pctO}%` }} title={`เสี่ยงสูง: ${pctO}%`} />}
+          {pctR > 0 && <div className="bg-rose-600 h-full transition-all duration-500" style={{ width: `${pctR}%` }} title={`เสี่ยงวิกฤต: ${pctR}%`} />}
+        </div>
+      </div>
+
+      {/* Legend with counts & percentages */}
+      <div className="w-full md:w-2/5 lg:w-1/3 shrink-0 grid grid-cols-4 gap-1 text-[11px] font-bold text-gray-500 md:pl-4">
         <div className="flex flex-col items-center border-r border-gray-100">
-          <span className="text-emerald-600">🟢 ปกติ</span>
-          <span>{green} ({pctG}%)</span>
+          <span className="text-emerald-600 text-xs">🟢 ปกติ</span>
+          <span className="mt-0.5 text-gray-700">{green} <span className="text-[10px] font-normal text-gray-400">({pctG}%)</span></span>
         </div>
         <div className="flex flex-col items-center border-r border-gray-100">
-          <span className="text-amber-500">🟡 ระวัง</span>
-          <span>{yellow} ({pctY}%)</span>
+          <span className="text-amber-500 text-xs">🟡 ระวัง</span>
+          <span className="mt-0.5 text-gray-700">{yellow} <span className="text-[10px] font-normal text-gray-400">({pctY}%)</span></span>
         </div>
         <div className="flex flex-col items-center border-r border-gray-100">
-          <span className="text-orange-500">🟠 เสี่ยง</span>
-          <span>{orange} ({pctO}%)</span>
+          <span className="text-orange-500 text-xs">🟠 เสี่ยง</span>
+          <span className="mt-0.5 text-gray-700">{orange} <span className="text-[10px] font-normal text-gray-400">({pctO}%)</span></span>
         </div>
         <div className="flex flex-col items-center">
-          <span className="text-rose-600">🔴 วิกฤต</span>
-          <span>{red} ({pctR}%)</span>
+          <span className="text-rose-600 text-xs">🔴 วิกฤต</span>
+          <span className="mt-0.5 text-gray-700">{red} <span className="text-[10px] font-normal text-gray-400">({pctR}%)</span></span>
         </div>
       </div>
     </div>
@@ -628,7 +633,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Level Bars detailed grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+          <div className="grid grid-cols-1 gap-4 pt-2">
             <LevelBar label="🌧️ ซึมเศร้า (Rain)" counts={clinicalStats.rain} total={stats.total} />
             <LevelBar label="⚡ ก้าวร้าว (Bolt)" counts={clinicalStats.bolt} total={stats.total} />
             <LevelBar label="🌫️ ถดถอย (Fog)" counts={clinicalStats.fog} total={stats.total} />
