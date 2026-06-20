@@ -1,101 +1,142 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
+
+// Use anon key — signInWithOtp works with anon key on server-side
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action, email, otp, enteredOtp } = body;
+    const { action, email, enteredOtp } = body;
 
     const cookieStore = cookies();
 
+    // ─── ACTION: SEND OTP ──────────────────────────────────────────
     if (action === 'send') {
       if (!email) {
         return NextResponse.json({ error: 'Email is required' }, { status: 400 });
       }
 
-      // Generate a 6-digit random code
-      const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-      // Store in an HTTP-only cookie (expires in 5 minutes)
-      cookieStore.set('email-otp-code', generatedOtp, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        maxAge: 300,
+      // Use Supabase Auth OTP — sends real email via Supabase's email service
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true, // สร้าง auth user ถ้ายังไม่มี
+        },
       });
+
+      if (error) {
+        console.error('[OTP Send Error]', error.message);
+        return NextResponse.json(
+          { error: `ไม่สามารถส่งรหัส OTP ได้: ${error.message}` },
+          { status: 500 }
+        );
+      }
+
+      // Store email in cookie so verify step knows which email to check
       cookieStore.set('email-otp-email', email, {
         httpOnly: true,
-        secure: true,
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 300,
+        maxAge: 600, // 10 minutes
       });
+      // Reset attempts counter
       cookieStore.set('email-otp-attempts', '0', {
         httpOnly: true,
-        secure: true,
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 300,
+        maxAge: 600,
       });
 
-      console.log(`[DEV OTP] Sent OTP code ${generatedOtp} to ${email}`);
+      console.log(`[Supabase OTP] Real OTP email sent to: ${email}`);
 
-      return NextResponse.json({ 
-        success: true, 
-        message: `ส่งรหัส OTP ไปยังอีเมล ${email} เรียบร้อยแล้ว (สุ่มสำหรับจำลอง)`,
-        // In dev mode, return the OTP so the tester doesn't have to check console logs
-        devOtp: generatedOtp 
+      return NextResponse.json({
+        success: true,
+        message: `ส่งรหัส OTP ไปยังอีเมล ${email} เรียบร้อยแล้ว กรุณาตรวจสอบกล่องจดหมาย (รหัสหมดอายุใน 10 นาที)`,
       });
     }
 
+    // ─── ACTION: VERIFY OTP ────────────────────────────────────────
     if (action === 'verify') {
       if (!enteredOtp) {
         return NextResponse.json({ error: 'OTP code is required' }, { status: 400 });
       }
 
-      const storedOtp = cookieStore.get('email-otp-code')?.value;
+      const storedEmail = cookieStore.get('email-otp-email')?.value;
       const attemptsStr = cookieStore.get('email-otp-attempts')?.value || '0';
       let attempts = parseInt(attemptsStr, 10);
 
-      if (!storedOtp) {
-        return NextResponse.json({ error: 'รหัส OTP หมดอายุหรือยังไม่ได้ส่งรหัส' }, { status: 400 });
+      if (!storedEmail) {
+        return NextResponse.json(
+          { error: 'เซสชัน OTP หมดอายุ กรุณากดขอรหัสใหม่' },
+          { status: 400 }
+        );
       }
 
-      if (attempts >= 3) {
-        return NextResponse.json({ error: 'คุณกรอกรหัสผิดเกิน 3 ครั้ง ระบบได้ล็อกเซสชันชั่วคราว' }, { status: 429 });
+      if (attempts >= 5) {
+        return NextResponse.json(
+          { error: 'คุณกรอกรหัสผิดเกิน 5 ครั้ง กรุณากดขอรหัสใหม่' },
+          { status: 429 }
+        );
       }
 
-      if (enteredOtp === storedOtp) {
-        // Verification succeeded, clear cookies
-        cookieStore.delete('email-otp-code');
-        cookieStore.delete('email-otp-email');
-        cookieStore.delete('email-otp-attempts');
-        return NextResponse.json({ verified: true });
-      } else {
+      // Verify with Supabase Auth
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: storedEmail,
+        token: enteredOtp.trim(),
+        type: 'email',
+      });
+
+      if (error || !data.session) {
         attempts += 1;
         cookieStore.set('email-otp-attempts', attempts.toString(), {
           httpOnly: true,
-          secure: true,
+          secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
-          maxAge: 300,
+          maxAge: 600,
         });
 
-        if (attempts >= 3) {
-          return NextResponse.json({ 
-            verified: false, 
-            attempts,
-            error: 'คุณกรอกรหัสผิดครบ 3 ครั้งแล้ว กรุณากดขอรหัสใหม่' 
-          }, { status: 400 });
+        const remaining = 5 - attempts;
+        if (attempts >= 5) {
+          // Clear session so they must request new OTP
+          cookieStore.delete('email-otp-email');
+          cookieStore.delete('email-otp-attempts');
+          return NextResponse.json(
+            {
+              verified: false,
+              attempts,
+              error: 'คุณกรอกรหัสผิดครบ 5 ครั้งแล้ว กรุณากดขอรหัสใหม่',
+            },
+            { status: 400 }
+          );
         }
 
-        return NextResponse.json({ 
-          verified: false, 
-          attempts,
-          error: `รหัส OTP ไม่ถูกต้อง (เหลือโอกาสอีก ${3 - attempts} ครั้ง)` 
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            verified: false,
+            attempts,
+            error: `รหัส OTP ไม่ถูกต้อง (เหลือโอกาสอีก ${remaining} ครั้ง)`,
+          },
+          { status: 400 }
+        );
       }
+
+      // ✅ Verified successfully — clear session cookies
+      cookieStore.delete('email-otp-email');
+      cookieStore.delete('email-otp-attempts');
+
+      console.log(`[Supabase OTP] Verified successfully for: ${storedEmail}`);
+
+      return NextResponse.json({ verified: true });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error: any) {
+    console.error('[OTP Route Error]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

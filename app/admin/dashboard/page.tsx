@@ -88,7 +88,7 @@ export default function ExecutiveDashboard() {
   const [enteredOtp, setEnteredOtp] = useState('');
   const [otpAttempts, setOtpAttempts] = useState(0);
   const [otpLoading, setOtpLoading] = useState(false);
-  const [devOtpCode, setDevOtpCode] = useState('');
+  const [devOtpCode, setDevOtpCode] = useState(''); // ไม่ใช้แล้ว — เก็บไว้ไม่ให้ TypeScript error
 
   // 🧠 Wellness & Risk States
   const [kwiData, setKwiData] = useState<any[]>([]);
@@ -442,9 +442,7 @@ export default function ExecutiveDashboard() {
 
       setOtpSent(true);
       setOtpAttempts(0);
-      if (data.devOtp) {
-        setDevOtpCode(data.devOtp);
-      }
+      // Real Supabase OTP email sent — no devOtp returned in production
     } catch (err: any) {
       setAuthError(err.message);
     } finally {
@@ -471,10 +469,10 @@ export default function ExecutiveDashboard() {
       
       if (!res.ok) {
         setOtpAttempts(data.attempts || 0);
-        if (data.attempts >= 3) {
+        if (data.attempts >= 5) {
           setOtpSent(false);
           setEnteredOtp('');
-          throw new Error('คุณกรอกรหัสผิดครบ 3 ครั้งแล้ว กรุณากดขอรหัสใหม่');
+          throw new Error('คุณกรอกรหัสผิดครบ 5 ครั้งแล้ว กรุณากดขอรหัสใหม่');
         }
         throw new Error(data.error || 'รหัส OTP ไม่ถูกต้อง');
       }
@@ -2112,11 +2110,7 @@ export default function ExecutiveDashboard() {
                     <div className="text-left space-y-1">
                       <div className="flex justify-between items-center">
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">กรอกรหัสยืนยัน 6 หลัก</label>
-                        {devOtpCode && (
-                          <span className="text-[9px] text-teal-400 font-bold bg-teal-950 px-1.5 py-0.5 rounded">
-                            Dev Code: {devOtpCode}
-                          </span>
-                        )}
+                        {/* Dev OTP code display removed — real email OTP is now used */}
                       </div>
                       <input
                         type="text"
