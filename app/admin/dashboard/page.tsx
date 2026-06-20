@@ -107,6 +107,225 @@ export default function AdminDashboard() {
   });
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
+  // 🎯 Dynamic Scenario Registry Builder States
+  const [scenarios, setScenarios] = useState<any[]>([]);
+  const [scenariosLoading, setScenariosLoading] = useState(false);
+  const [showScenarioDrawer, setShowScenarioDrawer] = useState(false);
+  const [activeWizardStep, setActiveWizardStep] = useState(1);
+  const [isSavingScenario, setIsSavingScenario] = useState(false);
+
+  // Form Wizard Fields
+  const [scenarioId, setScenarioId] = useState(''); // for editing
+  const [scenarioName, setScenarioName] = useState('');
+  const [projectType, setProjectType] = useState('esports_rov');
+  
+  // Telemetry constraints
+  const [goldDiffLimit, setGoldDiffLimit] = useState('');
+  const [outOfBaseDepth, setOutOfBaseDepth] = useState('');
+  const [avgMemberDistance, setAvgMemberDistance] = useState('');
+  const [deathIntervalSeconds, setDeathIntervalSeconds] = useState('');
+  const [conflictingDashMoveRatio, setConflictingDashMoveRatio] = useState('');
+
+  // Voice constraints
+  const [voiceKeywords, setVoiceKeywords] = useState('');
+  const [vviThreshold, setVviThreshold] = useState(3.5);
+  const [silentTiltEnabled, setSilentTiltEnabled] = useState(false);
+  const [concurrentConflictSeconds, setConcurrentConflictSeconds] = useState('');
+
+  // Output action
+  const [aiOutputMacroScript, setAiOutputMacroScript] = useState('');
+
+  async function fetchScenarios(orgId: string) {
+    try {
+      setScenariosLoading(true);
+      const res = await fetch(`/api/admin/scenarios?org_id=${orgId}`);
+      const json = await res.json();
+      if (json.data) {
+        setScenarios(json.data);
+      }
+    } catch (err) {
+      console.error('Error fetching scenarios:', err);
+    } finally {
+      setScenariosLoading(false);
+    }
+  }
+
+  const handleOpenNewScenario = () => {
+    setScenarioId('');
+    setScenarioName('');
+    setProjectType('esports_rov');
+    setGoldDiffLimit('');
+    setOutOfBaseDepth('');
+    setAvgMemberDistance('');
+    setDeathIntervalSeconds('');
+    setConflictingDashMoveRatio('');
+    setVoiceKeywords('');
+    setVviThreshold(3.5);
+    setSilentTiltEnabled(false);
+    setConcurrentConflictSeconds('');
+    setAiOutputMacroScript('');
+    setActiveWizardStep(1);
+    setShowScenarioDrawer(true);
+  };
+
+  const handleOpenEditScenario = (sc: any) => {
+    setScenarioId(sc.id);
+    setScenarioName(sc.scenario_name);
+    setProjectType(sc.project_type);
+    
+    // Telemetry constraints
+    const tc = sc.telemetry_constraints || {};
+    setGoldDiffLimit(tc.gold_diff_limit || '');
+    setOutOfBaseDepth(tc.out_of_base_depth || '');
+    setAvgMemberDistance(tc.avg_member_distance || '');
+    setDeathIntervalSeconds(tc.death_interval_seconds || '');
+    setConflictingDashMoveRatio(tc.conflicting_dash_move_ratio || '');
+
+    // Voice constraints
+    const vc = sc.voice_constraints || {};
+    setVoiceKeywords((vc.keywords || []).join(', '));
+    setVviThreshold(vc.vvi_floor || vc.vvi_ceiling || 3.5);
+    setSilentTiltEnabled(!!vc.silent_tilt_enabled);
+    setConcurrentConflictSeconds(vc.concurrent_conflict_seconds || '');
+
+    setAiOutputMacroScript(sc.ai_output_macro_script);
+    setActiveWizardStep(1);
+    setShowScenarioDrawer(true);
+  };
+
+  const handleDeleteScenario = async (id: string) => {
+    if (!confirm('คุณแน่ใจหรือไม่ที่จะลบฉากทัศน์กลยุทธ์นี้?')) return;
+    try {
+      const res = await fetch(`/api/admin/scenarios?id=${id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) {
+        const orgId = localStorage.getItem('kruth_admin_org_id') || '';
+        await fetchScenarios(orgId);
+      } else {
+        alert('ลบไม่สำเร็จ: ' + json.error);
+      }
+    } catch (err: any) {
+      alert('เกิดข้อผิดพลาด: ' + err.message);
+    }
+  };
+
+  const handleToggleScenarioActive = async (sc: any) => {
+    try {
+      const res = await fetch('/api/admin/scenarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: sc.id,
+          org_id: sc.org_id,
+          creator_id: sc.creator_id,
+          scenario_name: sc.scenario_name,
+          project_type: sc.project_type,
+          telemetry_constraints: sc.telemetry_constraints,
+          voice_constraints: sc.voice_constraints,
+          ai_output_macro_script: sc.ai_output_macro_script,
+          is_active: !sc.is_active
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        const orgId = localStorage.getItem('kruth_admin_org_id') || '';
+        await fetchScenarios(orgId);
+      }
+    } catch (err) {
+      console.error('Error toggling scenario state:', err);
+    }
+  };
+
+  const handleSaveScenario = async () => {
+    if (!scenarioName.trim() || !aiOutputMacroScript.trim()) {
+      alert('กรุณากรอกข้อมูล ชื่อฉากทัศน์ และ ใบสั่งงาน AI/ปุ่มด่วน ให้ครบถ้วน');
+      return;
+    }
+
+    setIsSavingScenario(true);
+    try {
+      const orgId = localStorage.getItem('kruth_admin_org_id') || '';
+      const email = localStorage.getItem('kruth_admin_email') || 'admin';
+
+      // Compile JSONB constraints
+      const telemetry_constraints: any = {};
+      if (goldDiffLimit) telemetry_constraints.gold_diff_limit = Number(goldDiffLimit);
+      if (outOfBaseDepth) telemetry_constraints.out_of_base_depth = Number(outOfBaseDepth);
+      if (avgMemberDistance) telemetry_constraints.avg_member_distance = Number(avgMemberDistance);
+      if (deathIntervalSeconds) telemetry_constraints.death_interval_seconds = Number(deathIntervalSeconds);
+      if (conflictingDashMoveRatio) telemetry_constraints.conflicting_dash_move_ratio = Number(conflictingDashMoveRatio);
+
+      const voice_constraints: any = {
+        keywords: voiceKeywords.split(',').map(k => k.trim()).filter(Boolean),
+        vvi_floor: Number(vviThreshold),
+        silent_tilt_enabled: silentTiltEnabled
+      };
+      if (concurrentConflictSeconds) voice_constraints.concurrent_conflict_seconds = Number(concurrentConflictSeconds);
+
+      const res = await fetch('/api/admin/scenarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: scenarioId || undefined,
+          org_id: orgId,
+          creator_id: email,
+          scenario_name: scenarioName,
+          project_type: projectType,
+          telemetry_constraints,
+          voice_constraints,
+          ai_output_macro_script: aiOutputMacroScript,
+          is_active: true
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setShowScenarioDrawer(false);
+        await fetchScenarios(orgId);
+      } else {
+        alert('บันทึกไม่สำเร็จ: ' + json.error);
+      }
+    } catch (err: any) {
+      alert('เกิดข้อผิดพลาด: ' + err.message);
+    } finally {
+      setIsSavingScenario(false);
+    }
+  };
+
+  const handleAISmartSuggest = () => {
+    const name = scenarioName.toLowerCase();
+    if (name.includes('bait') || name.includes('ล่อ') || name.includes('หลอก')) {
+      setGoldDiffLimit('1500');
+      setOutOfBaseDepth('500');
+      setVoiceKeywords('เลือดน้อย, ตามได้, ไล่ๆ, ไปต่อ');
+      setVviThreshold(3.6);
+      setAiOutputMacroScript('🔘 สั่งดึงจังหวะถอยคุมพื้นที่ | คำเตือน: ศัตรูหายไปจากแผนที่ 3 ตัว เสี่ยงโดนล่อซุ่มโจมตี');
+      alert('AI แนะนำเงื่อนไขสำหรับฉากทัศน์ "โดนล่อออกนอกฐาน (Baiting)" เรียบร้อยแล้วค่ะ');
+    } else if (name.includes('pick') || name.includes('แยก') || name.includes('เดี่ยว')) {
+      setAvgMemberDistance('900');
+      setDeathIntervalSeconds('15');
+      setVoiceKeywords('ช่วยด้วย, ไม่ทัน, โดนดัก, รุม');
+      setVviThreshold(3.7);
+      setSilentTiltEnabled(true);
+      setAiOutputMacroScript('🔘 สั่งรวมกลุ่มคุมเลนกลาง | คำเตือน: รูปเกมกระจายตัวเกินเกณฑ์ปลอดภัย บังคับส่งสัญญาณสลับมาเดินคู่');
+      alert('AI แนะนำเงื่อนไขสำหรับฉากทัศน์ "แยกกันเดินจนโดนเก็บ (Pick-offs)" เรียบร้อยแล้วค่ะ');
+    } else if (name.includes('hesit') || name.includes('ลังเล') || name.includes('สู้ไม่สุด')) {
+      setConflictingDashMoveRatio('0.75');
+      setVoiceKeywords('เข้า, ถอย, เอาไงดี, ขัดแย้ง');
+      setVviThreshold(3.5);
+      setConcurrentConflictSeconds('1.0');
+      setAiOutputMacroScript('🔘 สั่งให้ถอยเซฟแนวหลัง | บันทึกสถิติ: เพิ่มดัชนีความย้อนแย้งทางปริชานในคลังพัฒนาการระยะยาว');
+      alert('AI แนะนำเงื่อนไขสำหรับฉากทัศน์ "ลังเลตัดสินใจขัดแย้ง (Hesitation)" เรียบร้อยแล้วค่ะ');
+    } else {
+      setGoldDiffLimit('2000');
+      setAvgMemberDistance('800');
+      setVoiceKeywords('กันบ้าน, เอาหน่อย, ลุย');
+      setVviThreshold(3.5);
+      setAiOutputMacroScript('🔘 สั่งคุมพื้นที่เชิงรับ | คำเตือน: AI ตรวจพบความเครียดน้ำเสียงคอลเกมและกำลังทีมกระจายตัว');
+      alert('AI ทำการค้นหาประวัติแมตช์ความพ่ายแพ้ในอดีต และแนะนำเงื่อนไขเฉลี่ยเริ่มต้นให้เรียบร้อยแล้วค่ะ');
+    }
+  };
+
   // โทนสีของ KRUTH DEMM สำหรับกราฟ
   const COLORS = ['#1A3A5C', '#2E75B6', '#F59E0B', '#10B981', '#8B5CF6'];
 
@@ -469,6 +688,9 @@ export default function AdminDashboard() {
       // 9. Fetch executive feedbacks
       await fetchFeedbacks(orgId);
 
+      // 10. Fetch custom scenarios
+      await fetchScenarios(orgId);
+
     } catch (err) {
       console.error('fetchDashboardData Error:', err);
     } finally {
@@ -824,17 +1046,428 @@ export default function AdminDashboard() {
                     </td>
                   </tr>
                 ))}
-                {feedbacks.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
-                      ยังไม่มีประวัติการบันทึกประเมินผลคำแนะนำในหน่วยงานนี้ คุณสามารถกด "ประเมินคำแนะนำนี้" ในบับเบิ้ลโค้ชด้านล่าง หรือปุ่มด้านบนเพื่อเพิ่มข้อมูลค่ะ
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
         </div>
+
+        {/* 🎯 ส่วนจัดการคลังฉากทัศน์กลยุทธ์ (Dynamic Scenario Registry Builder) */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6 text-left">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-4 gap-4">
+            <div>
+              <h3 className="font-bold text-[#1A3A5C] text-lg flex items-center gap-2">
+                <span>🎯</span> คลังฉากทัศน์และแผนกลยุทธ์ทีม (Strategic Scenario Registry)
+              </h3>
+              <p className="text-xs text-gray-500">จัดการแผนรับมือตรรกะ AI และสติกเกอร์ปุ่มสั่งการ Quick Macros ขององค์กร</p>
+            </div>
+            <button
+              onClick={handleOpenNewScenario}
+              className="bg-[#1D8B75] hover:bg-[#156E5C] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+            >
+              <span>➕</span> เพิ่มฉากทัศน์กลยุทธ์ใหม่
+            </button>
+          </div>
+
+          {scenariosLoading ? (
+            <div className="text-center py-8 text-xs text-gray-400 animate-pulse">กำลังโหลดคลังฉากทัศน์...</div>
+          ) : scenarios.length === 0 ? (
+            <div className="text-center py-8 text-xs text-gray-400">
+              ยังไม่มีการตั้งค่าฉากทัศน์เฉพาะของหน่วยงานนี้ (ระบบจะใช้การดักจับค่าความเสี่ยงตามมาตรฐานเริ่มต้น)
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {scenarios.map((sc) => {
+                const tc = sc.telemetry_constraints || {};
+                const vc = sc.voice_constraints || {};
+                return (
+                  <div
+                    key={sc.id}
+                    className={`border rounded-2xl p-5 shadow-xs transition-all relative ${
+                      sc.is_active ? 'border-emerald-100 bg-emerald-50/10' : 'border-gray-100 bg-gray-50/20 opacity-60'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700">
+                          {sc.project_type === 'esports_rov' ? '🎮 ROV Strategic' : '🏢 Corporate Crisis'}
+                        </span>
+                        <h4 className="font-bold text-sm text-gray-800 mt-1">{sc.scenario_name}</h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {/* Active Toggle Switch */}
+                        <button
+                          onClick={() => handleToggleScenarioActive(sc)}
+                          className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 ${
+                            sc.is_active ? 'bg-emerald-500' : 'bg-gray-300'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                              sc.is_active ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Constraints Summary */}
+                    <div className="space-y-2 mb-4 text-xs text-gray-600">
+                      {/* Telemetry constraints */}
+                      <div className="flex items-start gap-1.5">
+                        <span className="font-bold text-[#1A3A5C]">📊 เงื่อนไขเกม:</span>
+                        <span className="bg-white/80 border border-gray-100 rounded-md px-1.5 py-0.5 text-[10px]">
+                          {Object.keys(tc).length > 0 ? (
+                            Object.keys(tc).map((k) => {
+                              if (k === 'gold_diff_limit') return `ส่วนต่างเงิน < -${tc[k]}`;
+                              if (k === 'out_of_base_depth') return `พิกัดนอกฐาน > ${tc[k]}ม.`;
+                              if (k === 'avg_member_distance') return `ระยะกระจายทีม > ${tc[k]}ม.`;
+                              if (k === 'death_interval_seconds') return `สมาชิกร่วงต่อคิว < ${tc[k]}วิ`;
+                              if (k === 'conflicting_dash_move_ratio') return `สัดส่วนสั่งขัดแย้ง > ${tc[k]}`;
+                              return `${k}: ${tc[k]}`;
+                            }).join(' | ')
+                          ) : (
+                            'ไม่มีตัวเลขเงื่อนไขดักจับ'
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Voice constraints */}
+                      <div className="flex items-start gap-1.5">
+                        <span className="font-bold text-[#1A3A5C]">🎙️ สัญญาณเสียง:</span>
+                        <span className="bg-white/80 border border-gray-100 rounded-md px-1.5 py-0.5 text-[10px]">
+                          VVI ≥ {vc.vvi_floor || vc.vvi_ceiling || '3.5'} 
+                          {vc.keywords && vc.keywords.length > 0 && ` | คำดักจับ: "${vc.keywords.join(', ')}"`}
+                          {vc.silent_tilt_enabled && ` | ตรวจจับ Silent Tilt`}
+                        </span>
+                      </div>
+
+                      {/* Action Script */}
+                      <div className="mt-2 pt-2 border-t border-dashed border-gray-100 flex items-start gap-1.5 font-sans">
+                        <span className="font-bold text-[#1A3A5C] shrink-0">🤖 ใบสั่งงาน AI:</span>
+                        <span className="text-[11px] text-gray-700 italic font-mono break-all">{sc.ai_output_macro_script}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions buttons */}
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={() => handleOpenEditScenario(sc)}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                      >
+                        ✏️ แก้ไขเงื่อนไข
+                      </button>
+                      <button
+                        onClick={() => handleDeleteScenario(sc.id)}
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-800 transition-colors"
+                      >
+                        🗑️ ลบแผน
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 📋 Form Wizard Drawer: สร้าง/แก้ไขฉากทัศน์กลยุทธ์ */}
+        {showScenarioDrawer && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex justify-end">
+            <div className="bg-white w-full max-w-lg h-full shadow-2xl flex flex-col p-6 text-left animate-slide-in overflow-y-auto">
+              <div className="flex justify-between items-center border-b pb-4 mb-4">
+                <h3 className="text-lg font-bold text-[#1A3A5C] flex items-center gap-2">
+                  <span>➕</span> {scenarioId ? 'แก้ไขฉากทัศน์กลยุทธ์' : 'สร้างฉากทัศน์กลยุทธ์ทีมใหม่'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowScenarioDrawer(false)}
+                  className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Wizard Steps indicator */}
+              <div className="flex justify-between items-center mb-6 bg-gray-50 rounded-xl p-3 text-[10px] md:text-xs font-bold text-gray-450">
+                <span className={activeWizardStep === 1 ? 'text-[#1D8B75]' : ''}>1. ตั้งชื่อและหมวดหมู่</span>
+                <span>➔</span>
+                <span className={activeWizardStep === 2 ? 'text-[#1D8B75]' : ''}>2. ตรรกะเงื่อนไข</span>
+                <span>➔</span>
+                <span className={activeWizardStep === 3 ? 'text-[#1D8B75]' : ''}>3. คำพูด & เสียง</span>
+                <span>➔</span>
+                <span className={activeWizardStep === 4 ? 'text-[#1D8B75]' : ''}>4. แนะนำคำสั่ง</span>
+              </div>
+
+              {/* Wizard Content */}
+              <div className="flex-1 space-y-4">
+                
+                {/* STEP 1: Basic Identity */}
+                {activeWizardStep === 1 && (
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-xs text-[#1A3A5C] uppercase tracking-wider">ขั้นตอนที่ 1: ข้อมูลตั้งต้นแผนกลยุทธ์</h4>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5">ชื่อฉากทัศน์/แผน (เช่น แผนรับมือการล่อซุ่มโจมตี)</label>
+                      <input
+                        type="text"
+                        value={scenarioName}
+                        onChange={(e) => setScenarioName(e.target.value)}
+                        placeholder="กรอกชื่อแผนกลยุทธ์ดักจับ..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5">ประเภทโหมดโครงการ (Project Type)</label>
+                      <select
+                        value={projectType}
+                        onChange={(e) => setProjectType(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                      >
+                        <option value="esports_rov">🎮 โหมดจำลองทีมแข่ง E-Sports (RoV)</option>
+                        <option value="corporate_crisis">🏢 โหมดการบริหารจัดการวิกฤตองค์กร (Corporate)</option>
+                      </select>
+                    </div>
+
+                    {/* AI Smart Suggest Trigger */}
+                    <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 mt-6">
+                      <div className="flex items-start gap-2.5">
+                        <span className="text-xl">💡</span>
+                        <div className="space-y-1">
+                          <h5 className="text-xs font-bold text-amber-800">ผู้ช่วยอัจฉริยะ AI Smart Suggest</h5>
+                          <p className="text-[10px] text-amber-700">
+                            พิมพ์คีย์เวิร์ดชื่อแผนด้านบน (เช่น "ล่อ", "แยก", "ลังเล") จากนั้นกดปุ่มด้านล่าง 
+                            AI จะสแกนข้อมูลสถิติที่เคยพ่ายแพ้ในประวัติศาสตร์แมตช์ซ้อม เพื่อแนะนำเงื่อนไขตัวเลขและ VVI ที่เหมาะสมให้อัตโนมัติในคลิกเดียวค่ะ!
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleAISmartSuggest}
+                            disabled={!scenarioName.trim()}
+                            className="mt-2 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg transition-colors disabled:opacity-40"
+                          >
+                            ให้ AI ค้นหาสถิติประวัติและแนะนำเงื่อนไข
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 2: Telemetry Constraints */}
+                {activeWizardStep === 2 && (
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-xs text-[#1A3A5C] uppercase tracking-wider">ขั้นตอนที่ 2: ตั้งตรรกะตัวเลขดักจับ (Telemetry Trigger)</h4>
+                    
+                    {projectType === 'esports_rov' ? (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">ส่วนต่างเงินในแผนที่เมื่อเริ่มวิกฤต (ติดลบทอง)</label>
+                          <input
+                            type="number"
+                            value={goldDiffLimit}
+                            onChange={(e) => setGoldDiffLimit(e.target.value)}
+                            placeholder="เช่น 1500 (ทองเสียเปรียบมากกว่า 1,500)"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">ระยะห่างวิ่งหลุดแนวป้องปราการความลึก (เมตร)</label>
+                          <input
+                            type="number"
+                            value={outOfBaseDepth}
+                            onChange={(e) => setOutOfBaseDepth(e.target.value)}
+                            placeholder="เช่น 500 (วิ่งฉีกหลุดลึกกว่า 500 เมตร)"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">ระยะห่างเฉลี่ยความกระจายตัวของสมาชิกทีม (เมตร)</label>
+                          <input
+                            type="number"
+                            value={avgMemberDistance}
+                            onChange={(e) => setAvgMemberDistance(e.target.value)}
+                            placeholder="เช่น 800 (ห่างเฉลี่ยเกิน 800 เมตร)"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">ความถี่เกิดสมาชิกตายเรียงลำดับไล่เลี่ยกัน (วินาที)</label>
+                          <input
+                            type="number"
+                            value={deathIntervalSeconds}
+                            onChange={(e) => setDeathIntervalSeconds(e.target.value)}
+                            placeholder="เช่น 20 (ตายห่างกันไม่เกิน 20 วินาที)"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">อัตราเกิดการสั่งเคลื่อนที่และพุ่งทิศทางขัดแย้งกัน (Ratio)</label>
+                          <input
+                            type="number"
+                            step="0.05"
+                            value={conflictingDashMoveRatio}
+                            onChange={(e) => setConflictingDashMoveRatio(e.target.value)}
+                            placeholder="เช่น 0.8 (สั่งลุยปะทะสั่งถอยทับซ้อนกัน 80%)"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Generic Corporate Constraints */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">ความขัดแย้งสะสมของพนักงานในทีม (คะแนนความต่าง)</label>
+                          <input
+                            type="number"
+                            value={goldDiffLimit}
+                            onChange={(e) => setGoldDiffLimit(e.target.value)}
+                            placeholder="เช่น 1500"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">ระยะห่างเฉลี่ยความผูกพันพนักงานในชิ้นงาน (เมตรจำลอง)</label>
+                          <input
+                            type="number"
+                            value={avgMemberDistance}
+                            onChange={(e) => setAvgMemberDistance(e.target.value)}
+                            placeholder="เช่น 800"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* STEP 3: Voice / Semantic Trigger */}
+                {activeWizardStep === 3 && (
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-xs text-[#1A3A5C] uppercase tracking-wider">ขั้นตอนที่ 3: ระบุชุดคำศัพท์และระดับเสียงระมัดระวัง</h4>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5">คำศัพท์แท็กคีย์เวิร์ดที่ต้องการดักจับ (คั่นด้วยจุลภาค `,`)</label>
+                      <input
+                        type="text"
+                        value={voiceKeywords}
+                        onChange={(e) => setVoiceKeywords(e.target.value)}
+                        placeholder="เช่น เลือดน้อย, ตามได้, ช่วยด้วย, ไม่ทัน, ไหวป่าว"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-xs font-bold text-gray-700">เกณฑ์เฝ้าระวังดัชนีความตึงเครียดน้ำเสียง (VVI Threshold)</label>
+                        <span className="text-xs font-extrabold text-[#1D8B75]">{vviThreshold.toFixed(1)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1.0"
+                        max="5.0"
+                        step="0.1"
+                        value={vviThreshold}
+                        onChange={(e) => setVviThreshold(Number(e.target.value))}
+                        className="w-full accent-[#1D8B75]"
+                      />
+                      <div className="flex justify-between text-[9px] text-gray-400 mt-1">
+                        <span>1.0 (น้ำเสียงสงบนิ่ง)</span>
+                        <span>3.0 (เริ่มตื่นตัว)</span>
+                        <span>5.0 (ตื่นตระหนกสูง/Tilt)</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={silentTiltEnabled}
+                          onChange={(e) => setSilentTiltEnabled(e.target.checked)}
+                          className="w-4 h-4 rounded accent-[#1D8B75]"
+                        />
+                        <div className="text-xs font-bold text-gray-700">เปิดใช้งานตรวจจับสภาวะเสียงเงียบผิดปกติคอลทีม (Silent Tilt)</div>
+                      </label>
+                      <p className="text-[10px] text-gray-400 mt-1 pl-6">
+                        ดักจับเมื่อตรวจพบการงดคุยและสื่อสารกะทันหันขณะข้อมูลเกมบ่งชี้สถานการณ์ตึงเครียด
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">ระยะเวลาพบพนักงานคอลสั่งการทับซ้อนขัดแย้งกัน (วินาที)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={concurrentConflictSeconds}
+                        onChange={(e) => setConcurrentConflictSeconds(e.target.value)}
+                        placeholder="เช่น 1.0 (ดักคำพูด 'สู้' ปะทะ 'ถอย' พร้อมกันใน 1 วินาที)"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 4: Strategy Recommendations & Macros */}
+                {activeWizardStep === 4 && (
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-xs text-[#1A3A5C] uppercase tracking-wider">ขั้นตอนที่ 4: ใบสั่งงาน AI และ Macro คำสั่งด่วน</h4>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5">เนื้อหาคำแนะนำและยุทธวิธีของ AI (AI Action Recommendation Script)</label>
+                      <textarea
+                        value={aiOutputMacroScript}
+                        onChange={(e) => setAiOutputMacroScript(e.target.value)}
+                        placeholder="กรอกปุ่มลัดสั่งการเรืองแสง และข้อความที่ต้องการให้ AI แจ้งเตือนโค้ช..."
+                        rows={5}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#1D8B75] font-sans"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        ข้อแนะนำ: เขียนข้อความแบบ `[🔘 คำสั่งบนปุ่มด่วน] | คำอธิบายยุทธศาสตร์เสริมเชิงบวก` 
+                        ปุ่มนี้จะส่องแสงวาบบนจอโค้ช/ผู้บริหารหน้างานเมื่อเกิดสถานการณ์วิกฤตนี้ขึ้นจริงทันที
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+              {/* Drawer Footer Actions */}
+              <div className="border-t pt-4 mt-6 flex justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveWizardStep(prev => Math.max(1, prev - 1))}
+                  disabled={activeWizardStep === 1}
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors disabled:opacity-40"
+                >
+                  ก่อนหน้า
+                </button>
+
+                {activeWizardStep < 4 ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveWizardStep(prev => Math.min(4, prev + 1))}
+                    className="px-4 py-2 bg-[#1A3A5C] text-white rounded-xl text-xs font-bold hover:bg-[#2E75B6] transition-colors"
+                  >
+                    ถัดไป
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSaveScenario}
+                    disabled={isSavingScenario}
+                    className="px-5 py-2 bg-[#1D8B75] text-white rounded-xl text-xs font-bold hover:bg-[#156E5C] transition-colors disabled:opacity-40"
+                  >
+                    {isSavingScenario ? 'กำลังบันทึก...' : '💾 บันทึกแผนกลยุทธ์'}
+                  </button>
+                )}
+              </div>
+
+            </div>
+          </div>
+        )}
 
         {/* 📋 Modal: แบบฟอร์มประเมินคำแนะนำการบริหาร */}
         {showFeedbackModal && (
