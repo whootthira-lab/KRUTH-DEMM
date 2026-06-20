@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { usePrivacyTimeout } from '@/hooks/usePrivacyTimeout';
 import { registerPasskey, authenticatePasskey } from '@/lib/webauthn-client';
+import SecurityWatermarkWrapper from '@/components/SecurityWatermarkWrapper';
 
 interface LevelBarProps {
   label: string;
@@ -77,6 +78,8 @@ export default function ExecutiveDashboard() {
   const [userRole, setUserRole] = useState<string>('org_admin');
   const [authError, setAuthError] = useState<string | null>(null);
   const [adminUserId, setAdminUserId] = useState<string>('');
+  const [adminEmail, setAdminEmail] = useState<string>('');
+  const [orgId, setOrgId] = useState<string>('');
   
   // OTP fallback flow states
   const [showOtpFallback, setShowOtpFallback] = useState(false);
@@ -345,7 +348,13 @@ export default function ExecutiveDashboard() {
   });
 
   // 🔒 Zero-Trust Audit Logging helper
-  async function writeAuditLog(targetMemberId?: string, actionName: string = 'EXECUTIVE_DASHBOARD_ACCESS') {
+  async function writeAuditLog(
+    targetMemberId?: string,
+    actionName: string = 'EXECUTIVE_DASHBOARD_ACCESS',
+    actionType: string = 'VIEW',
+    targetResourceId?: string,
+    metadata: any = {}
+  ) {
     try {
       const email = localStorage.getItem('kruth_admin_email') || 'unknown';
       const orgId = localStorage.getItem('kruth_admin_org_id') || 'unknown';
@@ -355,7 +364,10 @@ export default function ExecutiveDashboard() {
         executive_id: email,
         org_id: orgId,
         target_member_id: targetMemberId,
-        access_granted_to: actionName
+        access_granted_to: actionName,
+        action_type: actionType,
+        target_resource_id: targetResourceId,
+        metadata
       };
 
       const res = await fetch('/api/audit/log', {
@@ -521,6 +533,8 @@ export default function ExecutiveDashboard() {
       return;
     }
 
+    setAdminEmail(email);
+    setOrgId(orgId);
     setUserRole(role);
     setIsSuperAdmin(role === 'super_admin');
     
@@ -915,7 +929,8 @@ export default function ExecutiveDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 font-sans text-gray-800">
+    <SecurityWatermarkWrapper adminEmail={adminEmail} orgId={orgId} enabled={isVerified && !isLocked && userRole !== 'coach'}>
+      <div className="min-h-screen bg-gray-50 py-8 px-4 font-sans text-gray-800">
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header */}
@@ -2033,6 +2048,15 @@ export default function ExecutiveDashboard() {
               <p className="text-xs text-slate-400">กรุณายืนยันตัวตนระดับบริหารเพื่อปลดล็อกสิทธิ์การเข้าถึงแดชบอร์ด</p>
             </div>
 
+            <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 text-left text-[11.5px] text-slate-400 leading-relaxed space-y-1.5">
+              <span className="font-bold text-teal-400 flex items-center gap-1.5">
+                🛡️ การคุ้มครองข้อมูลส่วนบุคคล (PDPA) & นโยบายความมั่นคงปลอดภัย
+              </span>
+              <p>
+                ในการเข้าถึงระบบนี้ ระบบจะทำการประมวลผลข้อมูลส่วนบุคคลด้านสุขภาพ จิตวิทยา และบันทึกกิจกรรมความปลอดภัยนิติวิทยาศาสตร์ (Audit Logs รวมถึงการพิมพ์ คัดลอก และสลับหน้าต่างทำงาน) ด้วยลายเซ็นดิจิทัลเข้ารหัสที่ไม่สามารถปฏิเสธความรับผิดชอบได้ (Non-repudiation) ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล
+              </p>
+            </div>
+
             {authError && (
               <div className="p-3 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-semibold text-left">
                 ⚠️ {authError}
@@ -2139,6 +2163,7 @@ export default function ExecutiveDashboard() {
         </div>
       )}
 
-    </div>
+      </div>
+    </SecurityWatermarkWrapper>
   );
 }

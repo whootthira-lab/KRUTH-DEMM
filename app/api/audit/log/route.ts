@@ -9,7 +9,15 @@ const hmacSecret = process.env.HMAC_SECRET || 'kruth-mind-forensic-default-salt-
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { executive_id, org_id, target_member_id, access_granted_to = 'INDIVIDUAL_WELLBEING_PANEL' } = body;
+    const { 
+      executive_id, 
+      org_id, 
+      target_member_id, 
+      access_granted_to = 'INDIVIDUAL_WELLBEING_PANEL',
+      action_type = 'VIEW',
+      target_resource_id,
+      metadata = {}
+    } = body;
 
     if (!executive_id || !org_id) {
       return NextResponse.json(
@@ -23,7 +31,7 @@ export async function POST(request: Request) {
     const userAgent = request.headers.get('user-agent') || 'Unknown Browser';
 
     // 2. Generate HMAC-SHA256 Signature for Non-Repudiation Audit Trail
-    const signatureInput = `${executive_id}:${org_id}:${target_member_id || ''}:${access_granted_to}:${ipAddress}:${userAgent}`;
+    const signatureInput = `${executive_id}:${org_id}:${target_member_id || ''}:${access_granted_to}:${ipAddress}:${userAgent}:${action_type}:${target_resource_id || ''}:${JSON.stringify(metadata)}`;
     const digitalSignatureHash = createHmac('sha256', hmacSecret)
       .update(signatureInput)
       .digest('hex');
@@ -39,7 +47,10 @@ export async function POST(request: Request) {
         access_granted_to,
         ip_address: ipAddress,
         user_agent: userAgent,
-        digital_signature_hash: digitalSignatureHash
+        digital_signature_hash: digitalSignatureHash,
+        action_type,
+        target_resource_id,
+        metadata
       });
 
     if (insertErr) {

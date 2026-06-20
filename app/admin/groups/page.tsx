@@ -13,6 +13,7 @@ import {
 } from '@/lib/scoring';
 import { usePrivacyTimeout } from '@/hooks/usePrivacyTimeout';
 import { registerPasskey, authenticatePasskey } from '@/lib/webauthn-client';
+import SecurityWatermarkWrapper from '@/components/SecurityWatermarkWrapper';
 
 interface Org {
   id: string;
@@ -143,6 +144,8 @@ export default function AdminGroupsPage() {
   const [isLocked, setIsLocked] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [adminUserId, setAdminUserId] = useState<string>('');
+  const [adminEmail, setAdminEmail] = useState<string>('');
+  const [orgId, setOrgId] = useState<string>('');
   
   // OTP fallback flow states
   const [showOtpFallback, setShowOtpFallback] = useState(false);
@@ -281,6 +284,8 @@ export default function AdminGroupsPage() {
 
     const superCheck = role === 'super_admin';
     setIsSuperAdmin(superCheck);
+    setAdminEmail(email || '');
+    setOrgId(orgId || '');
 
     if (!superCheck) {
       if (orgId) {
@@ -322,7 +327,13 @@ export default function AdminGroupsPage() {
   });
 
   // 🔒 Zero-Trust Audit Logging helper
-  async function writeAuditLog(targetMemberId?: string, actionName: string = 'INDIVIDUAL_WELLBEING_PANEL') {
+  async function writeAuditLog(
+    targetMemberId?: string,
+    actionName: string = 'INDIVIDUAL_WELLBEING_PANEL',
+    actionType: string = 'VIEW',
+    targetResourceId?: string,
+    metadata: any = {}
+  ) {
     try {
       const email = localStorage.getItem('kruth_admin_email') || 'unknown';
       const orgId = selectedOrgId || localStorage.getItem('kruth_admin_org_id');
@@ -332,7 +343,10 @@ export default function AdminGroupsPage() {
         executive_id: email,
         org_id: orgId,
         target_member_id: targetMemberId,
-        access_granted_to: actionName
+        access_granted_to: actionName,
+        action_type: actionType,
+        target_resource_id: targetResourceId,
+        metadata
       };
 
       const res = await fetch('/api/audit/log', {
@@ -904,7 +918,7 @@ export default function AdminGroupsPage() {
 
       setAssignments(newAssignments);
       showMsg(`จัดกลุ่มด้วย AI สำเร็จ แบ่งได้ ${currentGroup - 1} กลุ่มตามความสัมพันธ์ทางจิตวิทยาและธาตุเกิด`, 'success');
-      writeAuditLog(undefined, 'AI_AUTO_GROUP_OPTIMIZATION_RUN');
+      writeAuditLog(undefined, 'AI_AUTO_GROUP_OPTIMIZATION_RUN', 'EXECUTE', 'ROV_OPTIMIZER');
     } catch (e: any) {
       console.error(e);
       showMsg('เกิดข้อผิดพลาดในการจัดกลุ่ม AI: ' + e.message, 'error');
@@ -1287,7 +1301,8 @@ export default function AdminGroupsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 font-sans text-gray-800">
+    <SecurityWatermarkWrapper adminEmail={adminEmail} orgId={orgId} enabled={isVerified && !isLocked}>
+      <div className="min-h-screen bg-gray-50 py-8 px-4 font-sans text-gray-800">
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Header */}
@@ -1596,7 +1611,7 @@ export default function AdminGroupsPage() {
                               type="button"
                               onClick={() => {
                                 setAnalyzingGroupNo(groupNo);
-                                writeAuditLog(undefined, `GROUP_ANALYSIS_MODAL_VIEW_GP_${groupNo}`);
+                                writeAuditLog(undefined, `GROUP_ANALYSIS_MODAL_VIEW_GP_${groupNo}`, 'VIEW', `GROUP_${groupNo}`);
                               }}
                               className="w-full mt-2 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[0.7rem] font-bold transition-colors shadow-sm flex items-center justify-center gap-1.5"
                             >
@@ -2645,6 +2660,15 @@ export default function AdminGroupsPage() {
               <p className="text-xs text-slate-400">กรุณายืนยันตัวตนระดับบริหารเพื่อปลดล็อกสิทธิ์การเข้าถึงความลับ</p>
             </div>
 
+            <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 text-left text-[11.5px] text-slate-400 leading-relaxed space-y-1.5">
+              <span className="font-bold text-teal-400 flex items-center gap-1.5">
+                🛡️ การคุ้มครองข้อมูลส่วนบุคคล (PDPA) & นโยบายความมั่นคงปลอดภัย
+              </span>
+              <p>
+                ในการเข้าถึงระบบนี้ ระบบจะทำการประมวลผลข้อมูลส่วนบุคคลด้านสุขภาพ จิตวิทยา และบันทึกกิจกรรมความปลอดภัยนิติวิทยาศาสตร์ (Audit Logs รวมถึงการพิมพ์ คัดลอก และสลับหน้าต่างทำงาน) ด้วยลายเซ็นดิจิทัลเข้ารหัสที่ไม่สามารถปฏิเสธความรับผิดชอบได้ (Non-repudiation) ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล
+              </p>
+            </div>
+
             {authError && (
               <div className="p-3 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-semibold text-left">
                 ⚠️ {authError}
@@ -2751,6 +2775,7 @@ export default function AdminGroupsPage() {
         </div>
       )}
 
-    </div>
+      </div>
+    </SecurityWatermarkWrapper>
   );
 }
