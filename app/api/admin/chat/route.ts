@@ -193,6 +193,13 @@ ${membersListText}
 4. **ห้องบัญชาการ Live War Room:** หากคุณเป็นโค้ชและต้องการประเมินแก้ทางดราฟต์ฮีโร่เรียลไทม์ สามารถเข้าใช้งานระบบได้ที่ลิงก์ "/coach/war-room" ค่ะ`;
     }
 
+    // Extract and save chat insights for target members mentioned in the executive chat
+    try {
+      await extractAndSaveChatInsights(orgId, message);
+    } catch (e) {
+      console.error('Failed to run extractAndSaveChatInsights:', e);
+    }
+
     return NextResponse.json({
       ok: true,
       replyText,
@@ -208,5 +215,122 @@ ${membersListText}
   } catch (error: any) {
     console.error('Executive Chat API Error:', error);
     return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+  }
+}
+
+async function extractAndSaveChatInsights(orgId: string, message: string) {
+  try {
+    // 1. Fetch organization members
+    let userIds: string[] = [];
+    if (orgId === 'global') {
+      const { data: allResults } = await supabase.from('results').select('user_id');
+      userIds = Array.from(new Set((allResults || []).map(r => r.user_id)));
+    } else {
+      const { data: members } = await supabase
+        .from('org_members')
+        .select('user_id')
+        .eq('org_id', orgId);
+      userIds = (members || []).map(m => m.user_id);
+    }
+
+    if (userIds.length === 0) return;
+
+    // Fetch members full names
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, full_name')
+      .in('id', userIds);
+
+    if (!users || users.length === 0) return;
+
+    // 2. Fallback rule-based extractor
+    const fallbackInsights: any[] = [];
+    const conflictKeywords = ['ขัดแย้ง', 'ทะเลาะ', 'มีปัญหา', 'ไม่ลงรอย', 'เขม่น', 'ไม่ถูกกัน', 'conflict', 'แชตขัดแย้ง', 'มีปากเสียง', 'ตึงเครียด', 'ทะเลาะกัน', 'ขัดคอ'];
+    const burnoutKeywords = ['เหนื่อย', 'ล้า', 'หมดไฟ', 'เครียด', 'ท้อ', 'ถอดใจ', 'burnout', 'ล้าสะสม', 'ตึงเครียด', 'ไม่ไหว', 'ลาออก'];
+
+    users.forEach(u => {
+      const name = u.full_name;
+      if (name && message.includes(name)) {
+        // Check conflict
+        const hasConflict = conflictKeywords.some(kw => message.includes(kw));
+        if (hasConflict) {
+          fallbackInsights.push({
+            org_id: orgId === 'global' ? null : orgId,
+            target_user_id: u.id,
+            insight_tag: 'conflict_risk',
+            confidence_score: 0.85,
+            context_excerpt: message.substring(Math.max(0, message.indexOf(name) - 30), Math.min(message.length, message.indexOf(name) + name.length + 30))
+          });
+        }
+        // Check burnout
+        const hasBurnout = burnoutKeywords.some(kw => message.includes(kw));
+        if (hasBurnout && !hasConflict) {
+          fallbackInsights.push({
+            org_id: orgId === 'global' ? null : orgId,
+            target_user_id: u.id,
+            insight_tag: 'burnout_warning',
+            confidence_score: 0.80,
+            context_excerpt: message.substring(Math.max(0, message.indexOf(name) - 30), Math.min(message.length, message.indexOf(name) + name.length + 30))
+          });
+        }
+      }
+    });
+
+    let insightsToInsert = fallbackInsights;
+
+    // 3. Try LLM extraction if keys are available
+    if (process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY) {
+      try {
+        const memberListStr = users.map(u => `ID: ${u.id}, Name: ${u.full_name}`).join('\n');
+        const prompt = `You are a psychological analyst extracting employee insight tags from chat messages.
+Given this list of organization members:
+${memberListStr}
+
+Analyze the following chat message from an executive:
+"${message}"
+
+Extract any employee state insights. Specifically look for:
+1. 'conflict_risk': indicating interpersonal conflict, friction, or communication breakdown with someone in the team.
+2. 'burnout_warning': indicating high stress, exhaustion, or loss of motivation.
+
+Return ONLY a valid JSON array of objects representing the findings, with no markdown formatting and no extra text. 
+Each object must have:
+- target_user_id: string (matching member ID)
+- insight_tag: string ('conflict_risk' or 'burnout_warning')
+- confidence_score: number (between 0.0 and 1.0)
+- context_excerpt: string (a short snippet of the text showing the context)
+
+If no insights are found, return an empty array: []`;
+
+        const reply = await callGenerativeAI(prompt, [], "Extract insights from the chat.");
+        const cleanReply = reply.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleanReply);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          insightsToInsert = parsed.map((item: any) => ({
+            org_id: orgId === 'global' ? null : orgId,
+            target_user_id: item.target_user_id,
+            insight_tag: item.insight_tag,
+            confidence_score: Number(item.confidence_score) || 0.8,
+            context_excerpt: item.context_excerpt || message
+          }));
+        }
+      } catch (llmErr) {
+        console.error("LLM Extraction failed, using fallback rule-based:", llmErr);
+      }
+    }
+
+    // 4. Save to database
+    if (insightsToInsert.length > 0) {
+      const { error } = await supabase
+        .from('executive_chat_insights')
+        .insert(insightsToInsert);
+      if (error) {
+        console.error("Error inserting executive chat insights:", error.message);
+      } else {
+        console.log(`Successfully saved ${insightsToInsert.length} chat insights.`);
+      }
+    }
+  } catch (err: any) {
+    console.error("extractAndSaveChatInsights error:", err.message);
   }
 }

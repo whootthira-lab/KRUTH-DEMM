@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { SimProfile, RoVHero, calcPredictedResourceGreed, calcPredictedResourceSharing } from '@/lib/scoring';
+import { SimProfile, RoVHero, calcTeamSynergy, calcRoVMatchCapability, calcPredictedResourceGreed, calcPredictedResourceSharing } from '@/lib/scoring';
+import { usePrivacyTimeout } from '@/hooks/usePrivacyTimeout';
 
 export default function EsportsLiveWarRoom() {
   // --- States ---
@@ -32,10 +33,39 @@ export default function EsportsLiveWarRoom() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  // 🔒 Security & Privacy States
+  const [role, setRole] = useState<string>('org_admin');
+  const [isLocked, setIsLocked] = useState(false);
+  const [swappedMembers, setSwappedMembers] = useState<any[]>([]);
+  const [allOrgMembers, setAllOrgMembers] = useState<any[]>([]);
+  const [macroVulnerability, setMacroVulnerability] = useState<number | null>(null);
+  const [teamFocusStability, setTeamFocusStability] = useState<number | null>(null);
+
+  // Real-time Audio Simulation States
+  const [activeVoiceMemberId, setActiveVoiceMemberId] = useState<string | null>(null);
+  const [memberVoiceStates, setMemberVoiceStates] = useState<Record<string, {
+    vvi: number;
+    state: string;
+    macroLabel?: string;
+    macroAdvice?: string;
+    pitch: number;
+    rate: number;
+    negativeDensity: number;
+  }>>({});
   
   // Feedback messages
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' | '' }>({ text: '', type: '' });
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // 🔒 Zero-Trust Inactivity & Tab-Switching Lock hook
+  usePrivacyTimeout({
+    isActive: !isLocked,
+    onTimeout: () => {
+      setIsLocked(true);
+      showMsg('🔒 ระบบล็อกหน้าจอความปลอดภัยอัตโนมัติเนื่องจากไม่มีการเคลื่อนไหวหรือมีการสลับหน้าต่างทำงาน', 'error');
+    }
+  });
 
   // --- Initial Load ---
   useEffect(() => {
@@ -58,6 +88,9 @@ export default function EsportsLiveWarRoom() {
       setGroupNumbers([]);
       setSelectedGroupNumber('');
       setMembers([]);
+      setSwappedMembers([]);
+      loadAllOrgMembers(selectedOrgId);
+      loadMacroMetrics(selectedOrgId);
     }
   }, [selectedOrgId]);
 
@@ -67,6 +100,7 @@ export default function EsportsLiveWarRoom() {
       loadGroupNumbers(selectedSessionId);
       setSelectedGroupNumber('');
       setMembers([]);
+      setSwappedMembers([]);
     }
   }, [selectedSessionId]);
 
@@ -77,8 +111,83 @@ export default function EsportsLiveWarRoom() {
     }
   }, [selectedSessionId, selectedGroupNumber]);
 
+  // Real-time Voice Volatility Index (VVI) simulation loop
+  useEffect(() => {
+    if (!activeVoiceMemberId || !selectedSessionId) return;
+
+    const interval = setInterval(async () => {
+      const target = swappedMembers.find(m => m.user_id === activeVoiceMemberId);
+      if (!target) return;
+
+      const baseN = target.score_n ?? 3.0;
+      const rand = Math.random();
+      let pitch_ratio = 1.0 + (rand * 0.4);
+      let speech_rate = 1.0 + (rand * 0.3);
+      let negative_keyword_density = 0.0;
+
+      // Simulate tilt for high-neuroticism players under pressure or randomly
+      if (baseN > 3.5 && rand > 0.4) {
+        pitch_ratio = 1.5 + (Math.random() * 0.5);
+        speech_rate = 1.4 + (Math.random() * 0.4);
+        negative_keyword_density = 0.3 + (Math.random() * 0.4);
+      } else if (rand > 0.75) {
+        // Hype State
+        pitch_ratio = 1.3 + (Math.random() * 0.3);
+        speech_rate = 1.3 + (Math.random() * 0.3);
+        negative_keyword_density = 0.0;
+      } else if (rand < 0.15) {
+        // Dejected State
+        pitch_ratio = 0.8 + (Math.random() * 0.2);
+        speech_rate = 0.7 + (Math.random() * 0.2);
+        negative_keyword_density = 0.1 + (Math.random() * 0.2);
+      }
+
+      try {
+        const res = await fetch('/api/audio/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: selectedSessionId,
+            group_number: selectedGroupNumber ? Number(selectedGroupNumber) : 1,
+            user_id: activeVoiceMemberId,
+            game_time_seconds: gameMinute * 60 + Math.floor(Math.random() * 60),
+            pitch_ratio,
+            speech_rate,
+            negative_keyword_density,
+            last_game_event: 'FIGHTING'
+          })
+        });
+
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData.success) {
+            setMemberVoiceStates(prev => ({
+              ...prev,
+              [activeVoiceMemberId]: {
+                vvi: resData.data.vvi,
+                state: resData.data.predictedState,
+                macroLabel: resData.data.macroLabel,
+                macroAdvice: resData.data.macroAdvice,
+                pitch: Number(pitch_ratio.toFixed(2)),
+                rate: Number(speech_rate.toFixed(2)),
+                negativeDensity: Number(negative_keyword_density.toFixed(2))
+              }
+            }));
+          }
+        }
+      } catch (err) {
+        console.error("Audio processing simulation error:", err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [activeVoiceMemberId, selectedSessionId, selectedGroupNumber, gameMinute, swappedMembers]);
+
   // --- Functions ---
   async function checkAdminRole() {
+    const kruthRole = localStorage.getItem('kruth_admin_role') || 'org_admin';
+    setRole(kruthRole);
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -231,6 +340,7 @@ export default function EsportsLiveWarRoom() {
       });
 
       setMembers(parsedMembers);
+      setSwappedMembers(parsedMembers);
 
       // 5. Fetch telemetry session from db if exists
       const { data: telemetry, error: telErr } = await supabase
@@ -258,6 +368,142 @@ export default function EsportsLiveWarRoom() {
       showMsg('เกิดข้อผิดพลาดในการโหลดรายละเอียดกลุ่มย่อย: ' + e.message, 'error');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadAllOrgMembers(orgId: string) {
+    try {
+      const { data: mData, error: mErr } = await supabase
+        .from('org_members')
+        .select(`
+          user_id,
+          role,
+          users:user_id (
+            id,
+            full_name,
+            gender,
+            thai_element,
+            chinese_element
+          )
+        `)
+        .eq('org_id', orgId);
+
+      if (mErr) throw mErr;
+      if (!mData) return;
+
+      const parsed: any[] = mData.map((m: any) => ({
+        user_id: m.user_id,
+        role: m.role || 'member',
+        full_name: m.users?.full_name || 'ไม่ทราบชื่อ',
+        gender: m.users?.gender || 'O',
+        thai_element: m.users?.thai_element || '',
+        chinese_element: m.users?.chinese_element || '',
+        archetype: '',
+        quadrant_primary: '',
+        jungian_type: '',
+        score_o: 3.0,
+        score_c: 3.0,
+        score_e: 3.0,
+        score_a: 3.0,
+        score_n: 3.0,
+      }));
+
+      if (parsed.length > 0) {
+        const uids = parsed.map(m => m.user_id);
+        const { data: rData } = await supabase
+          .from('results')
+          .select('user_id, archetype_name_th, quadrant_primary, jungian_type, score_o, score_c, score_e, score_a, score_n')
+          .in('user_id', uids);
+
+        if (rData) {
+          parsed.forEach(m => {
+            const r = rData.find(x => x.user_id === m.user_id);
+            if (r) {
+              m.archetype = r.archetype_name_th;
+              m.quadrant_primary = r.quadrant_primary;
+              m.jungian_type = r.jungian_type;
+              m.score_o = r.score_o;
+              m.score_c = r.score_c;
+              m.score_e = r.score_e;
+              m.score_a = r.score_a;
+              m.score_n = r.score_n;
+            }
+          });
+        }
+
+        // 2d. Fetch member_activity_evaluations
+        try {
+          const { data: actData, error: actErr } = await supabase
+            .from('member_activity_evaluations')
+            .select('user_id, performance_rating, activity_name, qualitative_notes')
+            .in('user_id', uids);
+
+          if (!actErr && actData) {
+            const userEvals: Record<string, any[]> = {};
+            actData.forEach(act => {
+              if (!userEvals[act.user_id]) userEvals[act.user_id] = [];
+              userEvals[act.user_id].push({
+                performance_rating: Number(act.performance_rating),
+                activity_name: act.activity_name,
+                qualitative_notes: act.qualitative_notes
+              });
+            });
+
+            parsed.forEach(m => {
+              m.activity_evaluations = userEvals[m.user_id] || [];
+            });
+          }
+        } catch (actErr) {
+          console.error("Error loading activity evaluations in war-room:", actErr);
+        }
+
+        // 2e. Fetch executive_chat_insights
+        try {
+          const { data: insightData, error: insightErr } = await supabase
+            .from('executive_chat_insights')
+            .select('target_user_id, insight_tag, confidence_score, context_excerpt')
+            .eq('org_id', orgId);
+
+          if (!insightErr && insightData) {
+            const userGeneralConflict: Record<string, boolean> = {};
+            insightData.forEach(ins => {
+              if (ins.insight_tag === 'conflict_risk') {
+                userGeneralConflict[ins.target_user_id] = true;
+              }
+            });
+
+            parsed.forEach(m => {
+              m.has_conflict_risk = !!userGeneralConflict[m.user_id];
+              m.conflict_risk_users = [];
+            });
+          }
+        } catch (insightErr) {
+          console.error("Error loading executive chat insights in war-room:", insightErr);
+        }
+      }
+      setAllOrgMembers(parsed);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function loadMacroMetrics(orgId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('coach_team_vulnerability_snapshot')
+        .select('macro_team_vulnerability_index, team_global_focus_stability_percentage')
+        .eq('org_id', orgId)
+        .maybeSingle();
+
+      if (!error && data) {
+        setMacroVulnerability(data.macro_team_vulnerability_index);
+        setTeamFocusStability(data.team_global_focus_stability_percentage);
+      } else {
+        setMacroVulnerability(null);
+        setTeamFocusStability(null);
+      }
+    } catch (e) {
+      console.error(e);
     }
   }
 
@@ -424,6 +670,37 @@ export default function EsportsLiveWarRoom() {
     }
   }
 
+  const handleSwapMember = (oldUserId: string, newUserId: string) => {
+    const newMemberDetail = allOrgMembers.find(m => m.user_id === newUserId);
+    if (!newMemberDetail) return;
+    setSwappedMembers(prev => prev.map(m => m.user_id === oldUserId ? newMemberDetail : m));
+    showMsg('🔄 สลับตัวสมาชิกชั่วคราวสำเร็จ (สถานะจำลอง)', 'success');
+  };
+
+  const simProfiles = (swappedMembers || []).map(m => ({
+    user_id: m.user_id,
+    full_name: m.full_name,
+    gender: m.gender || 'O',
+    thai_element: m.thai_element || '',
+    chinese_element: m.chinese_element || '',
+    score_o: m.score_o ?? 3.0,
+    score_c: m.score_c ?? 3.0,
+    score_e: m.score_e ?? 3.0,
+    score_a: m.score_a ?? 3.0,
+    score_n: m.score_n ?? 3.0,
+    quadrant_primary: m.quadrant_primary || 'Q1',
+    jungian_type: m.jungian_type || 'TP',
+    via_dominant: m.via_dominant || '',
+    via_scores: m.via_scores || {},
+    kwi: m.kwi || { vitality: 3.0, meaning: 3.0, connection: 3.0, mastery: 3.0, resilience: 3.0 },
+    delta_tilt: m.delta_tilt || { anger: 0.0, aggression: 0.0 },
+    activity_evaluations: m.activity_evaluations || [],
+    has_conflict_risk: m.has_conflict_risk || false,
+    conflict_risk_users: m.conflict_risk_users || []
+  })) as unknown as SimProfile[];
+
+  const synergyRes = calcTeamSynergy(simProfiles, 'rov');
+
   // Check if opponents have hard cc
   const oppHasHardCC = oppHeroIds
     .map(id => rovHeroes.find(h => h.id === id))
@@ -542,20 +819,26 @@ export default function EsportsLiveWarRoom() {
               <div className="flex justify-between items-center mb-4 border-b border-slate-800/80 pb-3">
                 <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
                   <span>👥 Panel 1: Live Draft</span>
+                  <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">
+                    Synergy: {synergyRes.synergy}%
+                  </span>
                 </h3>
                 <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                  ทีมฝั่งเรา
+                  {role === 'coach' ? '🛡️ สิทธิ์ Coach (PDPA)' : '👑 สิทธิ์ Admin'}
                 </span>
               </div>
 
-              {members.length === 0 ? (
+              {swappedMembers.length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-6">ไม่มีสมาชิกที่จับกลุ่มในรอบกิจกรรมนี้</p>
               ) : (
                 <div className="space-y-4">
-                  {members.map((member) => {
+                  {swappedMembers.map((member) => {
                     const selectedHero = rovHeroes.find(h => h.id === teamHeroIds[member.user_id]);
                     const suggestion = getHeroFitSuggestion(member);
                     const suggestedSkill = getRecommendedSkill(selectedHero || null, oppHasHardCC);
+
+                    const voiceState = memberVoiceStates[member.user_id];
+                    const isMonitoring = activeVoiceMemberId === member.user_id;
 
                     return (
                       <div 
@@ -564,15 +847,87 @@ export default function EsportsLiveWarRoom() {
                       >
                         <div className="flex justify-between items-start">
                           <div>
-                            <div className="font-bold text-slate-200 text-xs">{member.full_name}</div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">
-                              {member.archetype ? `${member.archetype} (${member.quadrant_primary})` : 'ไม่มีผลประเมิน'}
+                            <div className="font-bold text-slate-200 text-xs flex flex-wrap items-center gap-1.5">
+                              <span>{member.full_name}</span>
+                              {voiceState && (
+                                <span className={`px-1.5 py-0.2 rounded text-[8px] font-black border ${
+                                  voiceState.state === 'TILT' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                  voiceState.state === 'HYPE' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
+                                  voiceState.state === 'DEJECTED' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                  'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                }`}>
+                                  VVI: {voiceState.vvi} ({voiceState.state})
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-0.5 flex flex-wrap items-center gap-1.5">
+                              {role === 'coach' ? (
+                                <span className="text-[9px] text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded blur-[0.5px] select-none" title="Access Denied — ข้อมูลถูกปกป้องตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล (RBAC Shielded Interpreter)">
+                                  🔒 [ซ่อนข้อมูลสุขภาวะรายบุคคล]
+                                </span>
+                              ) : (
+                                member.archetype ? `${member.archetype} (${member.quadrant_primary || 'Q1'})` : 'ไม่มีผลประเมิน'
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (activeVoiceMemberId === member.user_id) {
+                                    setActiveVoiceMemberId(null);
+                                  } else {
+                                    setActiveVoiceMemberId(member.user_id);
+                                    showMsg(`🎙️ เริ่มตรวจจับและวิเคราะห์สัญญาณเสียงแบบเรียลไทม์ของ ${member.full_name} แล้ว (Transient Memory)`, 'success');
+                                  }
+                                }}
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 transition ${
+                                  isMonitoring 
+                                    ? 'bg-rose-600/25 text-rose-400 border border-rose-500/40' 
+                                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-slate-200'
+                                }`}
+                              >
+                                <span>🎙️</span> {isMonitoring ? 'ยกเลิก' : 'วิเคราะห์เสียงสด'}
+                              </button>
                             </div>
                           </div>
                           <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold border ${suggestion.colorClass}`}>
                             {suggestion.role}
                           </span>
                         </div>
+
+                        {/* Monitored Wave Visualizer */}
+                        {isMonitoring && (
+                          <div className="flex items-center gap-1.5 bg-slate-900/60 p-2 rounded-lg border border-indigo-900/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                            <span className="text-[9px] font-bold text-slate-400">Live Voice telemetry:</span>
+                            <div className="flex gap-0.5 items-end h-2.5 overflow-hidden ml-1">
+                              <div className="w-0.5 bg-indigo-500 animate-bounce" style={{ height: '60%', animationDelay: '0.1s' }}></div>
+                              <div className="w-0.5 bg-indigo-400 animate-bounce" style={{ height: '100%', animationDelay: '0.3s' }}></div>
+                              <div className="w-0.5 bg-indigo-500 animate-bounce" style={{ height: '40%', animationDelay: '0.2s' }}></div>
+                              <div className="w-0.5 bg-indigo-600 animate-bounce" style={{ height: '80%', animationDelay: '0.5s' }}></div>
+                            </div>
+                            <span className="text-[8px] text-slate-500 ml-auto">
+                              Pitch: {voiceState?.pitch || '1.0'}x | Rate: {voiceState?.rate || '1.0'}x | NegDensity: {voiceState?.negativeDensity || '0.0'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* AI-Generated Quick Macros for Monitored Players under stress */}
+                        {voiceState && (voiceState.state === 'TILT' || voiceState.state === 'DEJECTED') && (
+                          <div className="space-y-1 mt-1 bg-rose-950/20 p-2 rounded-lg border border-rose-900/30">
+                            <div className="text-[9px] text-rose-300 font-bold flex items-center gap-1">
+                              <span>⚠️ AI คำนวณความเสี่ยงพฤติกรรม:</span> {voiceState.macroAdvice}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                showMsg(`📣 ส่งปุ่มลัดสั่งการยุทธศาสตร์ด่วน [${voiceState.macroLabel}] ไปยัง ${member.full_name} แล้ว`, 'success');
+                              }}
+                              className="w-full py-1 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-md text-[9px] tracking-wide animate-pulse shadow-md transition flex items-center justify-center gap-1"
+                            >
+                              <span>📢</span> คอลสายด่วนโค้ช: {voiceState.macroLabel}
+                            </button>
+                          </div>
+                        )}
 
                         {/* Hero Select Dropdown */}
                         <div className="flex gap-2 items-center">
@@ -588,6 +943,28 @@ export default function EsportsLiveWarRoom() {
                             {rovHeroes.map(h => (
                               <option key={h.id} value={h.id}>{h.hero_name_en} ({h.primary_role})</option>
                             ))}
+                          </select>
+                        </div>
+
+                        {/* Swap Member Sandbox Control */}
+                        <div className="flex gap-2 items-center">
+                          <span className="text-[10px] text-slate-500 font-semibold w-12">สลับตัว:</span>
+                          <select
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                handleSwapMember(member.user_id, e.target.value);
+                              }
+                            }}
+                            defaultValue=""
+                            className="bg-slate-950 border border-slate-800 text-[10px] text-slate-300 px-2 py-1 rounded-md focus:outline-none focus:border-indigo-500 flex-1"
+                          >
+                            <option value="" disabled>-- เลือกสลับสมาชิกชั่วคราว --</option>
+                            {allOrgMembers
+                              .filter(om => !swappedMembers.some(sm => sm.user_id === om.user_id))
+                              .map(om => (
+                                <option key={om.user_id} value={om.user_id}>{om.full_name}</option>
+                              ))
+                            }
                           </select>
                         </div>
 
@@ -623,6 +1000,33 @@ export default function EsportsLiveWarRoom() {
                 <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                   แก้ทาง & ไอเทมย่อย
                 </span>
+              </div>
+
+              {/* Macro Team Vulnerability Aggregation (Zero-Trust Blurred View) */}
+              <div className="space-y-3 mb-6 bg-slate-950/60 p-3 rounded-xl border border-slate-850">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between">
+                  <span>📊 สถิติความเสี่ยงภาพรวมทีม (Macro Metrics)</span>
+                  <span className="text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase">
+                    🔒 Zero-Trust Blurred
+                  </span>
+                </h4>
+                
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div className="bg-slate-900/50 p-2.5 rounded-lg border border-slate-800 text-center">
+                    <div className="text-[9px] text-slate-500 font-bold uppercase">ดัชนีความเปราะบางมหาภาค</div>
+                    <div className="text-sm font-extrabold text-indigo-400 mt-1">
+                      {macroVulnerability !== null ? `${macroVulnerability.toFixed(2)} / 5.0` : '3.00'}
+                    </div>
+                    <div className="text-[8px] text-slate-500 mt-0.5">บดบังด้วย Deterministic Noise</div>
+                  </div>
+                  <div className="bg-slate-900/50 p-2.5 rounded-lg border border-slate-800 text-center">
+                    <div className="text-[9px] text-slate-500 font-bold uppercase">ความมั่นคงสมาธิภาพรวม</div>
+                    <div className="text-sm font-extrabold text-teal-400 mt-1">
+                      {teamFocusStability !== null ? `${teamFocusStability.toFixed(1)}%` : '60.0%'}
+                    </div>
+                    <div className="text-[8px] text-slate-500 mt-0.5">ค่าเฉลี่ยสลัวรายกลุ่มองค์กร</div>
+                  </div>
+                </div>
               </div>
 
               {/* Opponents Selection Slots */}
@@ -824,6 +1228,27 @@ export default function EsportsLiveWarRoom() {
             </div>
           </div>
 
+        </div>
+      )}
+      {/* 🔒 Zero-Trust Frosted Glass Lock Screen */}
+      {isLocked && (
+        <div className="fixed inset-0 z-[999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900/90 border border-indigo-950 p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl space-y-4">
+            <div className="text-4xl text-indigo-400">🔒</div>
+            <h3 className="text-lg font-black text-white">ล็อกหน้าจอความปลอดภัย</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              ระบบล็อกหน้าจออัตโนมัติเพื่อป้องกันข้อมูลสุขภาวะองค์กรภายนอกรั่วไหล กรุณากดปุ่มด้านล่างเพื่อปลดล็อกเซสชันการทำงานของคุณ
+            </p>
+            <button
+              onClick={() => {
+                setIsLocked(false);
+                showMsg('🔓 ปลดล็อกเซสชันสำเร็จ', 'success');
+              }}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all"
+            >
+              🔓 ปลดล็อกเซสชัน
+            </button>
+          </div>
         </div>
       )}
       

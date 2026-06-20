@@ -8,8 +8,11 @@ import {
   calcTeamSynergy,
   calcRoVMatchCapability,
   calcCombatDominance,
+  optimizeGroup,
   SimProfile
 } from '@/lib/scoring';
+import { usePrivacyTimeout } from '@/hooks/usePrivacyTimeout';
+import { registerPasskey, authenticatePasskey } from '@/lib/webauthn-client';
 
 interface Org {
   id: string;
@@ -52,6 +55,14 @@ interface Member {
     anger: number;
     aggression: number;
   };
+  // NEW Phase 2 elements
+  activity_evaluations?: {
+    performance_rating: number;
+    activity_name: string;
+    qualitative_notes?: string;
+  }[];
+  conflict_risk_users?: string[];
+  has_conflict_risk?: boolean;
 }
 
 // Helpers for delta_tilt calculation and JSON parsing
@@ -127,6 +138,30 @@ export default function AdminGroupsPage() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   
+  // 🔒 Security & Zero-Trust Privacy States
+  const [isVerified, setIsVerified] = useState(false);
+  const [isLocked, setIsLocked] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [adminUserId, setAdminUserId] = useState<string>('');
+  
+  // OTP fallback flow states
+  const [showOtpFallback, setShowOtpFallback] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [enteredOtp, setEnteredOtp] = useState('');
+  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [devOtpCode, setDevOtpCode] = useState('');
+
+  // 🧠 AI Optimization step animation states
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizationStep, setOptimizationStep] = useState(0);
+
+  // 📂 Member pool drawer states
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterElement, setFilterElement] = useState('');
+  const [filterQuadrant, setFilterQuadrant] = useState('');
+
   const [members, setMembers] = useState<Member[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>('');
@@ -167,6 +202,51 @@ export default function AdminGroupsPage() {
   const [editingRoleUserId, setEditingRoleUserId] = useState<string | null>(null);
   const [customRoleInput, setCustomRoleInput] = useState<string>('');
 
+  // Manual Activity Logger States
+  const [evalTargetMember, setEvalTargetMember] = useState<Member | null>(null);
+  const [evalActivityName, setEvalActivityName] = useState('');
+  const [evalRating, setEvalRating] = useState('3.0');
+  const [evalNotes, setEvalNotes] = useState('');
+  const [submittingEval, setSubmittingEval] = useState(false);
+
+  async function handleSubmitEvaluation(e: React.FormEvent) {
+    e.preventDefault();
+    if (!evalTargetMember || !selectedSessionId) return;
+
+    setSubmittingEval(true);
+    try {
+      const res = await fetch('/api/simulation/log-activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: selectedSessionId,
+          user_id: evalTargetMember.user_id,
+          evaluator_id: adminUserId || localStorage.getItem('kruth_admin_email') || 'admin',
+          activity_name: evalActivityName,
+          performance_rating: Number(evalRating),
+          qualitative_notes: evalNotes
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to submit');
+      }
+
+      showMsg('บันทึกการประเมินกิจกรรมพฤติกรรมเรียบร้อยแล้ว', 'success');
+      setEvalTargetMember(null);
+      setEvalActivityName('');
+      setEvalRating('3.0');
+      setEvalNotes('');
+      // Re-fetch members to recalculate scores
+      await loadMembersAndSessions();
+    } catch (err: any) {
+      showMsg('เกิดข้อผิดพลาด: ' + err.message, 'error');
+    } finally {
+      setSubmittingEval(false);
+    }
+  }
+
   async function loadRovHeroes() {
     try {
       const { data, error } = await supabase.from('rov_knowledge_heroes').select('*').order('hero_name_en');
@@ -202,7 +282,200 @@ export default function AdminGroupsPage() {
 
     loadOrgs();
     loadRovHeroes();
+
+    // Zero-Trust lookup for userId to support WebAuthn
+    if (email) {
+      supabase.from('users').select('id').eq('email', email).maybeSingle().then(({ data: uData }) => {
+        if (uData) {
+          setAdminUserId(uData.id);
+        } else {
+          supabase.from('org_admins').select('id').eq('email', email).maybeSingle().then(({ data: aData }) => {
+            if (aData) {
+              setAdminUserId(aData.id);
+            } else {
+              setAdminUserId(email);
+            }
+          });
+        }
+      });
+    }
   }, []);
+
+  // 🔒 Zero-Trust Inactivity & Tab-Switching Lock hook
+  usePrivacyTimeout({
+    isActive: isVerified && !isLocked,
+    onTimeout: () => {
+      setIsLocked(true);
+      showMsg('🔒 ระบบล็อกหน้าจอความปลอดภัยอัตโนมัติเนื่องจากไม่มีการเคลื่อนไหวหรือมีการสลับหน้าต่างทำงาน', 'error');
+    }
+  });
+
+  // 🔒 Zero-Trust Audit Logging helper
+  async function writeAuditLog(targetMemberId?: string, actionName: string = 'INDIVIDUAL_WELLBEING_PANEL') {
+    try {
+      const email = localStorage.getItem('kruth_admin_email') || 'unknown';
+      const orgId = selectedOrgId || localStorage.getItem('kruth_admin_org_id');
+      if (!orgId) return;
+
+      const payload = {
+        executive_id: email,
+        org_id: orgId,
+        target_member_id: targetMemberId,
+        access_granted_to: actionName
+      };
+
+      const res = await fetch('/api/audit/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        console.error('Audit log failed:', data.error);
+      }
+    } catch (e) {
+      console.error('Audit log error:', e);
+    }
+  }
+
+  // 🔒 Passkey authentication logic
+  const handlePasskeyUnlock = async () => {
+    setAuthError(null);
+    try {
+      const email = localStorage.getItem('kruth_admin_email');
+      if (!email) {
+        setAuthError('ไม่พบอีเมลผู้ใช้งานในระบบ');
+        return;
+      }
+
+      let resolvedUserId = adminUserId;
+      if (!resolvedUserId) {
+        const { data: uData } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
+        if (uData) {
+          resolvedUserId = uData.id;
+        } else {
+          const { data: aData } = await supabase.from('org_admins').select('id').eq('email', email).maybeSingle();
+          resolvedUserId = aData ? aData.id : email;
+        }
+        setAdminUserId(resolvedUserId);
+      }
+
+      const verified = await authenticatePasskey(resolvedUserId);
+      if (verified) {
+        setIsVerified(true);
+        setIsLocked(false);
+        showMsg('🔓 ยืนยันตัวตนด้วย Passkey สำเร็จ ยินดีต้อนรับกลับสู่ระบบ', 'success');
+        writeAuditLog(resolvedUserId, 'EXECUTIVE_GATEWAY_UNLOCK_PASSKEY');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAuthError(err.message || 'การยืนยันตัวตนด้วย Passkey ล้มเหลว');
+    }
+  };
+
+  // 🔒 Email OTP request logic
+  const handleRequestOtp = async () => {
+    setAuthError(null);
+    setOtpLoading(true);
+    try {
+      const email = localStorage.getItem('kruth_admin_email');
+      if (!email) {
+        setAuthError('ไม่พบอีเมลผู้ใช้งานในระบบ');
+        return;
+      }
+
+      const res = await fetch('/api/auth/otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', email })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'ไม่สามารถส่งรหัส OTP ได้');
+      }
+
+      setOtpSent(true);
+      setOtpAttempts(0);
+      if (data.devOtp) {
+        setDevOtpCode(data.devOtp);
+      }
+      showMsg('✉️ ส่งรหัส OTP ไปยังอีเมลของท่านเรียบร้อยแล้ว', 'success');
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // 🔒 Email OTP verification logic
+  const handleVerifyOtp = async () => {
+    setAuthError(null);
+    setOtpLoading(true);
+    try {
+      if (!enteredOtp.trim()) {
+        setAuthError('กรุณากรอกรหัส OTP');
+        return;
+      }
+
+      const res = await fetch('/api/auth/otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', enteredOtp: enteredOtp.trim() })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        setOtpAttempts(data.attempts || 0);
+        if (data.attempts >= 3) {
+          setOtpSent(false);
+          setEnteredOtp('');
+          throw new Error('คุณกรอกรหัสผิดครบ 3 ครั้งแล้ว กรุณากดขอรหัสใหม่');
+        }
+        throw new Error(data.error || 'รหัส OTP ไม่ถูกต้อง');
+      }
+
+      if (data.verified) {
+        setIsVerified(true);
+        setIsLocked(false);
+        setOtpSent(false);
+        setEnteredOtp('');
+        setShowOtpFallback(false);
+        showMsg('🔓 ยืนยันตัวตนด้วย OTP สำเร็จ ยินดีต้อนรับกลับสู่ระบบ', 'success');
+        writeAuditLog(undefined, 'EXECUTIVE_GATEWAY_UNLOCK_OTP');
+      }
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // 🔒 Passkey device registration helper
+  const handleRegisterPasskey = async () => {
+    try {
+      const email = localStorage.getItem('kruth_admin_email');
+      if (!email) return;
+
+      let resolvedUserId = adminUserId;
+      if (!resolvedUserId) {
+        const { data: uData } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
+        if (uData) {
+          resolvedUserId = uData.id;
+        } else {
+          const { data: aData } = await supabase.from('org_admins').select('id').eq('email', email).maybeSingle();
+          resolvedUserId = aData ? aData.id : email;
+        }
+        setAdminUserId(resolvedUserId);
+      }
+
+      await registerPasskey(resolvedUserId);
+      showMsg('🎉 ลงทะเบียนอุปกรณ์นี้ด้วย Passkey เรียบร้อยแล้ว! สามารถใช้สแกนใบหน้า/นิ้วมือเพื่อปลดล็อกในครั้งถัดไป', 'success');
+      writeAuditLog(resolvedUserId, 'EXECUTIVE_PASSKEY_DEVICE_REGISTER');
+    } catch (err: any) {
+      console.error(err);
+      showMsg('เกิดข้อผิดพลาดในการลงทะเบียน Passkey: ' + err.message, 'error');
+    }
+  };
 
   // Load members and sessions when selected organization changes
   useEffect(() => {
@@ -403,6 +676,56 @@ export default function AdminGroupsPage() {
             m.delta_tilt = { anger: 0.0, aggression: 0.0 };
           }
         });
+
+        // 2d. Fetch member_activity_evaluations
+        try {
+          const { data: actData, error: actErr } = await supabase
+            .from('member_activity_evaluations')
+            .select('user_id, performance_rating, activity_name, qualitative_notes')
+            .in('user_id', userIds);
+
+          if (!actErr && actData) {
+            const userEvals: Record<string, any[]> = {};
+            actData.forEach(act => {
+              if (!userEvals[act.user_id]) userEvals[act.user_id] = [];
+              userEvals[act.user_id].push({
+                performance_rating: Number(act.performance_rating),
+                activity_name: act.activity_name,
+                qualitative_notes: act.qualitative_notes
+              });
+            });
+
+            parsedMembers.forEach(m => {
+              m.activity_evaluations = userEvals[m.user_id] || [];
+            });
+          }
+        } catch (actErr) {
+          console.error("Error loading activity evaluations:", actErr);
+        }
+
+        // 2e. Fetch executive_chat_insights
+        try {
+          const { data: insightData, error: insightErr } = await supabase
+            .from('executive_chat_insights')
+            .select('target_user_id, insight_tag, confidence_score, context_excerpt')
+            .eq('org_id', selectedOrgId);
+
+          if (!insightErr && insightData) {
+            const userGeneralConflict: Record<string, boolean> = {};
+            insightData.forEach(ins => {
+              if (ins.insight_tag === 'conflict_risk') {
+                userGeneralConflict[ins.target_user_id] = true;
+              }
+            });
+
+            parsedMembers.forEach(m => {
+              m.has_conflict_risk = !!userGeneralConflict[m.user_id];
+              m.conflict_risk_users = [];
+            });
+          }
+        } catch (insightErr) {
+          console.error("Error loading executive chat insights:", insightErr);
+        }
       }
 
       setMembers(parsedMembers);
@@ -467,45 +790,116 @@ export default function AdminGroupsPage() {
     }
   }
 
-  // Smart Auto-grouping algorithm (Groups of 2-3 members, no singletons)
-  function handleAutoGroup() {
+  const mapToSimProfile = (m: Member): SimProfile => {
+    const parseJson = (field: any) => {
+      if (typeof field === 'string') {
+        try { return JSON.parse(field); } catch { return {}; }
+      }
+      return field || {};
+    };
+
+    const viaScores = parseJson(m.via_scores);
+    const jungianScores = parseJson(m.jungian_scores);
+
+    return {
+      user_id: m.user_id,
+      full_name: m.full_name || 'ไม่พบชื่อ',
+      gender: m.gender,
+      thai_element: m.thai_element,
+      chinese_element: m.chinese_element,
+      score_o: m.score_o ?? 3.0,
+      score_c: m.score_c ?? 3.0,
+      score_e: m.score_e ?? 3.0,
+      score_a: m.score_a ?? 3.0,
+      score_n: m.score_n ?? 3.0,
+      quadrant_primary: m.quadrant || m.quadrant_primary || 'Q1',
+      jungian_type: m.jungian_type || 'TJ',
+      via_dominant: m.via_dominant || '',
+      via_scores: {
+        W: viaScores.Wisdom || viaScores.W || 3.0,
+        C: viaScores.Courage || viaScores.C || 3.0,
+        H: viaScores.Humanity || viaScores.H || 3.0,
+        J: viaScores.Justice || viaScores.J || 3.0,
+        T: viaScores.Temperance || viaScores.T || 3.0,
+        Tr: viaScores.Transcendence || viaScores.Tr || 3.0
+      },
+      kwi: m.kwi ? {
+        vitality: m.kwi.vitality,
+        meaning: m.kwi.meaning,
+        connection: m.kwi.connection,
+        mastery: m.kwi.mastery,
+        resilience: m.kwi.resilience
+      } : {
+        vitality: 3.0,
+        meaning: 3.0,
+        connection: 3.0,
+        mastery: 3.0,
+        resilience: 3.0
+      },
+      delta_tilt: {
+        anger: m.delta_tilt?.anger || 0.0,
+        aggression: m.delta_tilt?.aggression || 0.0
+      }
+    };
+  };
+
+  // Smart Auto-grouping algorithm powered by AI Optimization Engine
+  async function handleAutoGroup() {
     if (members.length < 2) {
       showMsg('สมาชิกมีน้อยเกินไป ไม่สามารถจัดกลุ่มย่อยได้ (ต้องการอย่างน้อย 2 คน)', 'error');
       return;
     }
 
-    // Shuffle members
-    const shuffled = [...members].sort(() => Math.random() - 0.5);
-    const newAssignments: Assignment[] = [];
-    
-    let currentGroup = 1;
-    let i = 0;
-    const len = shuffled.length;
+    setIsOptimizing(true);
+    setOptimizationStep(1);
 
-    while (i < len) {
-      const remaining = len - i;
-      let groupSize = 3; // default size
+    // Step-by-step progress simulation (750ms per step)
+    await new Promise(resolve => setTimeout(resolve, 750));
+    setOptimizationStep(2);
+    await new Promise(resolve => setTimeout(resolve, 750));
+    setOptimizationStep(3);
+    await new Promise(resolve => setTimeout(resolve, 750));
+    setOptimizationStep(4);
+    await new Promise(resolve => setTimeout(resolve, 750));
 
-      if (remaining === 4) {
-        groupSize = 2; // split remaining 4 into 2 and 2
-      } else if (remaining === 2) {
-        groupSize = 2;
+    try {
+      let remainingPool = [...members];
+      const newAssignments: Assignment[] = [];
+      let currentGroup = 1;
+
+      while (remainingPool.length > 0) {
+        const remainingCount = remainingPool.length;
+        let targetSize = 3;
+        if (remainingCount === 4) {
+          targetSize = 2;
+        } else if (remainingCount === 2) {
+          targetSize = 2;
+        }
+
+        const remainingProfiles = remainingPool.map(mapToSimProfile);
+        const bestGroupProfiles = optimizeGroup(remainingProfiles, targetSize, selectedProjectType, []);
+        const bestGroupIds = bestGroupProfiles.map(p => p.user_id);
+        
+        bestGroupProfiles.forEach(p => {
+          newAssignments.push({
+            user_id: p.user_id,
+            group_number: currentGroup
+          });
+        });
+
+        remainingPool = remainingPool.filter(m => !bestGroupIds.includes(m.user_id));
+        currentGroup++;
       }
 
-      const groupMembers = shuffled.slice(i, i + groupSize);
-      groupMembers.forEach(m => {
-        newAssignments.push({
-          user_id: m.user_id,
-          group_number: currentGroup
-        });
-      });
-
-      currentGroup++;
-      i += groupSize;
+      setAssignments(newAssignments);
+      showMsg(`จัดกลุ่มด้วย AI สำเร็จ แบ่งได้ ${currentGroup - 1} กลุ่มตามความสัมพันธ์ทางจิตวิทยาและธาตุเกิด`, 'success');
+      writeAuditLog(undefined, 'AI_AUTO_GROUP_OPTIMIZATION_RUN');
+    } catch (e: any) {
+      console.error(e);
+      showMsg('เกิดข้อผิดพลาดในการจัดกลุ่ม AI: ' + e.message, 'error');
+    } finally {
+      setIsOptimizing(false);
     }
-
-    setAssignments(newAssignments);
-    showMsg(`สุ่มจัดกลุ่มสมาชิกสำเร็จ แบ่งได้ ${currentGroup - 1} กลุ่ม (กลุ่มละ 2-3 คน)`, 'success');
   }
 
   async function handleSaveAssignments() {
@@ -893,9 +1287,19 @@ export default function AdminGroupsPage() {
             </h1>
             <p className="text-sm text-blue-200">แบ่งกลุ่มเวิร์กชอป (2-3 คน) สำหรับประเมินความเข้ากันได้</p>
           </div>
-          <Link href="/admin/dashboard" className="mt-4 md:mt-0 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-bold transition-colors">
-            📊 ไปแผงควบคุมหลัก
-          </Link>
+          <div className="flex flex-wrap gap-2 mt-4 md:mt-0">
+            {isVerified && (
+              <button
+                onClick={handleRegisterPasskey}
+                className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+              >
+                <span>🔑</span> ผูกอุปกรณ์ Passkey
+              </button>
+            )}
+            <Link href="/admin/dashboard" className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center">
+              📊 ไปแผงควบคุมหลัก
+            </Link>
+          </div>
         </div>
 
         {/* Status Messages */}
@@ -1037,6 +1441,17 @@ export default function AdminGroupsPage() {
                               <span className="text-xs text-gray-400 font-semibold">{groupPeers.length} คน</span>
                             </div>
 
+                            {/* Conflict Alert Warning */}
+                            {groupPeers.some(peer => peer.has_conflict_risk) && (
+                              <div className="bg-rose-50 border border-rose-200 text-rose-700 p-2.5 rounded-xl text-[0.65rem] flex items-start gap-1.5 shadow-sm">
+                                <span className="text-xs">⚠️</span>
+                                <div>
+                                  <p className="font-bold">เสี่ยงขัดแย้งในทีม (Conflict Risk)</p>
+                                  <p className="text-[0.6rem] text-rose-600">พบความขัดแย้งสะสมในประวัติแชตผู้บริหาร หักดัชนีประสานพลังทีมลง 15%</p>
+                                </div>
+                              </div>
+                            )}
+
                             <div className="space-y-2">
                               {groupPeers.map(m => {
                                 const assignment = assignments.find(a => a.user_id === m.user_id);
@@ -1168,7 +1583,10 @@ export default function AdminGroupsPage() {
                             )}
                             <button
                               type="button"
-                              onClick={() => setAnalyzingGroupNo(groupNo)}
+                              onClick={() => {
+                                setAnalyzingGroupNo(groupNo);
+                                writeAuditLog(undefined, `GROUP_ANALYSIS_MODAL_VIEW_GP_${groupNo}`);
+                              }}
                               className="w-full mt-2 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[0.7rem] font-bold transition-colors shadow-sm flex items-center justify-center gap-1.5"
                             >
                               <span>⚡</span> วิเคราะห์แนวโน้มและบริการกลุ่ม
@@ -1307,7 +1725,11 @@ export default function AdminGroupsPage() {
           let friction = 'GREEN';
           let frictionText = 'ต่ำ (Low Friction)';
           let frictionBg = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
-          if (displayScore < 40) {
+          if (synergyRes.isConflictPenaltyApplied) {
+            friction = 'RED';
+            frictionText = 'วิกฤต (Critical Friction) — พบความขัดแย้งสะสม';
+            frictionBg = 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+          } else if (displayScore < 40) {
             friction = 'RED';
             frictionText = 'วิกฤต (Critical Friction)';
             frictionBg = 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
@@ -1812,13 +2234,96 @@ export default function AdminGroupsPage() {
           );
         })()}
 
+        {/* 📝 Modal: บันทึกการประเมินกิจกรรมพฤติกรรมรายบุคคล */}
+        {evalTargetMember !== null && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+            <div className="bg-[#0f172a] text-slate-100 rounded-3xl max-w-md w-full shadow-2xl border border-slate-800 flex flex-col p-6 animate-fade-in text-left">
+              
+              <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+                <h3 className="text-base font-bold text-indigo-400 flex items-center gap-1.5">
+                  <span>📝</span> บันทึกการประเมินกิจกรรม: คุณ{evalTargetMember.full_name}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setEvalTargetMember(null)}
+                  className="text-slate-400 hover:text-slate-200 text-lg font-bold transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitEvaluation} className="space-y-4 text-xs">
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">🎯 ชื่องาน / กิจกรรม (Activity Name)</label>
+                  <input
+                    type="text"
+                    required
+                    value={evalActivityName}
+                    onChange={(e) => setEvalActivityName(e.target.value)}
+                    placeholder="เช่น การนำเสนอแผนงาน, สัมมนาเชิงปฏิบัติการ"
+                    className="w-full border border-slate-700 bg-slate-800 rounded-xl p-2.5 outline-none focus:border-indigo-500 text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">⭐️ คะแนนการประเมิน (Performance Rating: 1.0 - 5.0)</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="1.0"
+                      max="5.0"
+                      step="0.5"
+                      value={evalRating}
+                      onChange={(e) => setEvalRating(e.target.value)}
+                      className="flex-1 accent-indigo-500 cursor-pointer"
+                    />
+                    <span className="text-sm font-bold text-indigo-400 bg-indigo-950/50 px-2.5 py-1 rounded-lg border border-indigo-900/30 min-w-[40px] text-center">
+                      {evalRating}
+                    </span>
+                  </div>
+                  <p className="text-[0.65rem] text-slate-400 mt-1">1 = ปรับปรุง, 3 = ปานกลาง, 5 = ยอดเยี่ยม</p>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-300 block mb-1">✍️ บันทึกพฤติกรรม / ความเห็น (Qualitative Notes)</label>
+                  <textarea
+                    rows={3}
+                    value={evalNotes}
+                    onChange={(e) => setEvalNotes(e.target.value)}
+                    placeholder="ระบุข้อสังเกตเพิ่มเติมเกี่ยวกับการมีส่วนร่วม ความร่วมมือ หรือแนวคิดของสมาชิกท่านนี้..."
+                    className="w-full border border-slate-700 bg-slate-800 rounded-xl p-2.5 outline-none focus:border-indigo-500 text-slate-100 resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 border-t border-slate-800 pt-3 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setEvalTargetMember(null)}
+                    className="px-4 py-2 bg-slate-850 hover:bg-slate-800 text-slate-300 rounded-xl font-bold transition-colors"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingEval}
+                    className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {submittingEval ? 'กำลังบันทึก...' : '💾 บันทึกการประเมิน'}
+                  </button>
+                </div>
+              </form>
+
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* 🧘‍♀️ EXECUTIVE AI COACH FLOATING CHAT WIDGET */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end animate-fade-in">
         {/* Chat Panel */}
         {showExecChat && (
-          <div className="bg-white/95 border border-gray-100 shadow-2xl rounded-2xl w-[90vw] max-w-md h-[500px] flex flex-col mb-4 overflow-hidden animate-fade-in text-left">
+          <div className="bg-white/95 border border-gray-100 shadow-2xl rounded-2xl w-[90vw] max-w-md h-[500px] flex flex-col mb-4 overflow-hidden text-left">
             {/* Header */}
             <div className="bg-gradient-to-r from-[#1A3A5C] to-[#1D8B75] text-white p-4 flex justify-between items-center">
               <div className="flex items-center gap-2">
@@ -1834,7 +2339,7 @@ export default function AdminGroupsPage() {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
               {execMessages.map((msg, index) => (
-                <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[85%] rounded-2xl p-3.5 text-xs md:text-sm leading-relaxed text-left ${
                     msg.role === 'user'
                       ? 'bg-[#1A3A5C] text-white rounded-tr-none'
@@ -1936,6 +2441,304 @@ export default function AdminGroupsPage() {
           <span className="text-base">💼</span> ปรึกษา Executive AI Coach
         </button>
       </div>
+
+      {/* 👥 Member Pool Drawer Sidebar */}
+      <div 
+        className={`fixed inset-0 z-[150] flex justify-end transition-opacity duration-300 ${
+          isDrawerOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        {/* Backdrop */}
+        <div 
+          className="absolute inset-0 bg-black/50 backdrop-blur-xs"
+          onClick={() => setIsDrawerOpen(false)}
+        />
+        
+        {/* Drawer Content */}
+        <div 
+          className={`relative w-full max-w-md bg-[#0f172a] text-slate-100 shadow-2xl h-full flex flex-col z-10 border-l border-slate-800 transform transition-transform duration-300 ease-in-out ${
+            isDrawerOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          {/* Header */}
+          <div className="p-5 border-b border-slate-850 flex justify-between items-center">
+            <div>
+              <h3 className="font-black text-sm text-indigo-400 flex items-center gap-1.5">
+                <span>👥</span> คลังสมาชิกที่ยังไม่จัดกลุ่ม ({unassignedMembers.length} คน)
+              </h3>
+              <p className="text-[10px] text-slate-400 mt-0.5">เลือกใส่กลุ่มย่อยจำลองสำหรับวิเคราะห์ความสัมพันธ์</p>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setIsDrawerOpen(false)} 
+              className="text-slate-400 hover:text-slate-200 text-xl font-bold"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Filters */}
+          <div className="p-4 bg-slate-900/40 border-b border-slate-850 space-y-3">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="🔍 ค้นหาชื่อสมาชิก..."
+              className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-3.5 py-2.5 rounded-xl text-xs outline-none focus:border-indigo-500 placeholder-slate-500"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                value={filterElement}
+                onChange={e => setFilterElement(e.target.value)}
+                className="bg-slate-800 border border-slate-700 text-slate-100 px-2 py-1.5 rounded-lg text-xs outline-none focus:border-indigo-500"
+              >
+                <option value="">ธาตุเกิดทั้งหมด</option>
+                <option value="Fire">ธาตุไฟ (Fire)</option>
+                <option value="Water">ธาตุน้ำ (Water)</option>
+                <option value="Earth">ธาตุดิน (Earth)</option>
+                <option value="Wood">ธาตุไม้ (Wood)</option>
+                <option value="Metal">ธาตุทอง (Metal)</option>
+                <option value="Wind">ธาตุลม (Wind)</option>
+              </select>
+              <select
+                value={filterQuadrant}
+                onChange={e => setFilterQuadrant(e.target.value)}
+                className="bg-slate-800 border border-slate-700 text-slate-100 px-2 py-1.5 rounded-lg text-xs outline-none focus:border-indigo-500"
+              >
+                <option value="">จตุรภาคทั้งหมด</option>
+                <option value="Q1">Q1 (นักสำรวจ)</option>
+                <option value="Q2">Q2 (นักคิด)</option>
+                <option value="Q3">Q3 (ผู้ประสาน)</option>
+                <option value="Q4">Q4 (ผู้สร้างสรรค์)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Members List */}
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-850/50 p-3">
+            {unassignedMembers.filter(m => {
+              const nameMatch = m.full_name.toLowerCase().includes(searchQuery.toLowerCase());
+              const elementMatch = !filterElement || m.chinese_element === filterElement || m.thai_element === filterElement;
+              const quadrantMatch = !filterQuadrant || m.quadrant === filterQuadrant || m.quadrant_primary === filterQuadrant;
+              return nameMatch && elementMatch && quadrantMatch;
+            }).map(m => {
+              return (
+                <div key={m.user_id} className="p-3 hover:bg-slate-900/40 rounded-xl transition-all flex items-center justify-between gap-3 border border-transparent hover:border-slate-800 mb-1">
+                  <div className="min-w-0">
+                    <div className="font-bold text-white text-xs truncate">{m.full_name}</div>
+                    <div className="text-[10px] text-slate-400 truncate flex items-center gap-1.5 mt-1">
+                      <span className="px-1.5 py-0.5 bg-slate-850 rounded font-semibold text-slate-300">
+                        ☯️ {m.chinese_element || m.thai_element || 'ไร้ธาตุ'}
+                      </span>
+                      <span className="px-1.5 py-0.5 bg-slate-850 rounded font-semibold text-slate-300">
+                        🧭 {m.quadrant || 'Q1'}
+                      </span>
+                    </div>
+                  </div>
+                  <select
+                    onChange={e => {
+                      if (e.target.value !== "0") {
+                        handleManualChangeGroup(m.user_id, parseInt(e.target.value));
+                      }
+                    }}
+                    defaultValue="0"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white border-none rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none cursor-pointer"
+                  >
+                    <option value="0">➕ เข้ากลุ่ม</option>
+                    {Array.from({ length: Math.ceil(members.length / 2) + 1 }, (_, index) => (
+                      <option key={index + 1} value={index + 1}>กลุ่ม {index + 1}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+
+            {unassignedMembers.filter(m => {
+              const nameMatch = m.full_name.toLowerCase().includes(searchQuery.toLowerCase());
+              const elementMatch = !filterElement || m.chinese_element === filterElement || m.thai_element === filterElement;
+              const quadrantMatch = !filterQuadrant || m.quadrant === filterQuadrant || m.quadrant_primary === filterQuadrant;
+              return nameMatch && elementMatch && quadrantMatch;
+            }).length === 0 && (
+              <div className="p-8 text-center text-slate-500 text-xs">
+                ไม่พบสมาชิกที่ไม่มีกลุ่มย่อยสอดคล้องกับตัวกรอง
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 🧠 AI Optimization Engine Processing HUD Overlay */}
+      {isOptimizing && (
+        <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-md z-[200] flex flex-col items-center justify-center p-4">
+          <div className="max-w-md w-full text-center space-y-6">
+            <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full bg-indigo-500/10 animate-ping" />
+              <div className="absolute inset-2 rounded-full bg-indigo-500/20 animate-pulse" />
+              <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-teal-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-indigo-500/30">
+                🧠
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-lg font-black text-white uppercase tracking-wider">KM AI Optimization Engine v3.5</h3>
+              <p className="text-xs text-indigo-400 font-bold">กำลังคำนวณและประมวลผลการประกอบกำลังกลุ่มย่อยแบบองค์รวม...</p>
+            </div>
+
+            <div className="bg-[#0f172a]/85 rounded-2xl border border-slate-800 p-4 text-left space-y-3 shadow-inner">
+              {[
+                { step: 1, text: '🔍 ดึงข้อมูลและประมวลระดับ KWI / Big Five รายบุคคล' },
+                { step: 2, text: '⚖️ ตรวจสอบขีดจำกัดปฏิกิริยาเคมีธาตุเกิด (Wu Xing Balance) และอัตรา Friction Risk' },
+                { step: 3, text: '🧬 ประมวลแบบจำลองการจัดแบ่งด้วยทฤษฎี Exact Combinatorial' },
+                { step: 4, text: '🚀 สรุปผลขีดความสามารถการทำงานและจัดโครงสร้างหน้าที่กลุ่มย่อย' }
+              ].map(s => {
+                const isActive = optimizationStep === s.step;
+                const isCompleted = optimizationStep > s.step;
+                return (
+                  <div key={s.step} className="flex items-center gap-3 text-xs">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${
+                      isCompleted ? 'bg-emerald-500 text-white' : 
+                      isActive ? 'bg-indigo-500 text-white animate-pulse' : 
+                      'bg-slate-800 text-slate-500'
+                    }`}>
+                      {isCompleted ? '✓' : s.step}
+                    </div>
+                    <span className={isCompleted ? 'text-slate-400 line-through' : isActive ? 'text-indigo-400 font-bold' : 'text-slate-500'}>
+                      {s.text}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="h-1.5 w-full bg-slate-850 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-indigo-500 to-teal-400 transition-all duration-300 ease-out"
+                style={{ width: `${(optimizationStep / 4) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔒 Zero-Trust Security Lock Screen Overlay */}
+      {isLocked && (
+        <div className="fixed inset-0 bg-[#030712]/95 backdrop-blur-xl z-[300] flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-[#0b0f19] border border-slate-800 rounded-3xl shadow-2xl overflow-hidden p-8 text-center space-y-6 animate-fade-in">
+            <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-rose-600/10 to-indigo-600/10 border border-slate-800/80 flex items-center justify-center text-4xl shadow-inner relative">
+              <div className="absolute inset-0 rounded-full bg-rose-500/5 animate-pulse" />
+              🛡️
+            </div>
+
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-black text-white tracking-wide">ระบบความปลอดภัย Zero-Trust</h2>
+              <p className="text-xs text-slate-400">กรุณายืนยันตัวตนระดับบริหารเพื่อปลดล็อกสิทธิ์การเข้าถึงความลับ</p>
+            </div>
+
+            {authError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-semibold text-left">
+                ⚠️ {authError}
+              </div>
+            )}
+
+            {!showOtpFallback ? (
+              <div className="space-y-4">
+                <button
+                  onClick={handlePasskeyUnlock}
+                  className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
+                >
+                  <span>🔑</span> สแกน Passkey (Face ID/Fingerprint)
+                </button>
+                <div className="text-xs text-slate-500 border-t border-slate-800/80 pt-4 flex items-center justify-between">
+                  <span>ไม่มีอุปกรณ์ Passkey?</span>
+                  <button 
+                    onClick={() => {
+                      setShowOtpFallback(true);
+                      setAuthError(null);
+                    }}
+                    className="text-indigo-400 hover:underline font-bold"
+                  >
+                    ใช้รหัสยืนยัน Email OTP ✉️
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {!otpSent ? (
+                  <div className="space-y-3">
+                    <div className="text-left space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">อีเมลสำหรับรับรหัส OTP</label>
+                      <input
+                        type="text"
+                        value={localStorage.getItem('kruth_admin_email') || ''}
+                        disabled
+                        className="w-full bg-slate-900 border border-slate-800 text-slate-400 px-3.5 py-2.5 rounded-xl text-xs outline-none"
+                      />
+                    </div>
+                    <button
+                      onClick={handleRequestOtp}
+                      disabled={otpLoading}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-colors disabled:bg-slate-850"
+                    >
+                      {otpLoading ? 'กำลังส่งรหัส...' : '✉️ ส่งรหัส OTP ไปยังอีเมล'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="text-left space-y-1">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">กรอกรหัสยืนยัน 6 หลัก</label>
+                        {devOtpCode && (
+                          <span className="text-[9px] text-teal-400 font-bold bg-teal-950 px-1.5 py-0.5 rounded">
+                            Dev Code: {devOtpCode}
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={enteredOtp}
+                        onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, ''))}
+                        placeholder="••••••"
+                        className="w-full bg-slate-900 border border-slate-800 text-slate-100 text-center tracking-widest text-lg font-bold px-3.5 py-2.5 rounded-xl outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <button
+                      onClick={handleVerifyOtp}
+                      disabled={otpLoading || enteredOtp.length !== 6}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-colors disabled:bg-slate-850"
+                    >
+                      {otpLoading ? 'กำลังตรวจสอบ...' : '🔓 ปลดล็อกระบบ'}
+                    </button>
+                    
+                    <div className="flex justify-between items-center text-[10px] text-slate-500 pt-2">
+                      <button 
+                        onClick={handleRequestOtp}
+                        className="hover:underline text-indigo-400 font-semibold"
+                      >
+                        ขอรหัส OTP อีกครั้ง
+                      </button>
+                      <span>เหลือโอกาสกรอกอีก {3 - otpAttempts} ครั้ง</span>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="border-t border-slate-800/80 pt-4 flex items-center justify-start">
+                  <button 
+                    onClick={() => {
+                      setShowOtpFallback(false);
+                      setOtpSent(false);
+                      setAuthError(null);
+                    }}
+                    className="text-slate-500 hover:text-slate-400 text-xs font-semibold flex items-center gap-1"
+                  >
+                    ← กลับไปใช้ Passkey
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
+    "@simplewebauthn/server": "^8.1.1",
     "@supabase/supabase-js": "^2.103.0",
     "@vercel/og": "^0.6.2",
     "next": "14.2.5",

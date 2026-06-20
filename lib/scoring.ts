@@ -495,6 +495,14 @@ export interface SimProfile {
     anger: number;
     aggression: number;
   };
+  // NEW Phase 2 elements
+  activity_evaluations?: {
+    performance_rating: number;
+    activity_name: string;
+    qualitative_notes?: string;
+  }[];
+  conflict_risk_users?: string[];
+  has_conflict_risk?: boolean;
 }
 
 // 1. Pairwise Compatibility Matrix v2.0
@@ -570,11 +578,11 @@ export function calcWuXingScore(a: SimProfile, b: SimProfile): number {
   return 0.4;
 }
 
-// 3. Combined Compatibility Score (25% Psych + 75% Wu Xing)
+// 3. Combined Compatibility Score (75% Psych + 25% Wu Xing)
 export function calcCombinedScore(a: SimProfile, b: SimProfile): number {
   const compat = calcPairwiseCompatibility(a, b);
   const wuXing = calcWuXingScore(a, b);
-  return 0.25 * compat + 0.75 * (wuXing * 100);
+  return 0.25 * (wuXing * 100) + 0.75 * compat;
 }
 
 // 4. Task-Specific Potential Matrix
@@ -634,15 +642,51 @@ export function calcTaskPotential(members: SimProfile[], projectType: string): {
     score = Math.max(1.0, Math.min(5.0, 0.5 * (5 - avgN) + 0.5 * avgR));
   } else if (projectType === 'cohesion') {
     score = Math.max(1.0, Math.min(5.0, 0.6 * ((avgA + avgE) / 2) + 0.4 * (q3Density * 5.0)));
-  } else if (projectType === 'rov' || projectType === 'combat') {
+  } else if (projectType === 'combat' || projectType === 'combat_sports') {
     score = comeback;
+  } else if (projectType === 'esports_rov_assassin' || projectType === 'assassin') {
+    score = Math.max(1.0, Math.min(5.0, 0.4 * avgE + 0.3 * avgO + 0.3 * (5.0 - avgA)));
+  } else if (projectType === 'esports_rov_mage' || projectType === 'mage') {
+    score = Math.max(1.0, Math.min(5.0, 0.4 * avgO + 0.3 * avgC + 0.3 * (5.0 - avgN)));
+  } else if (projectType === 'esports_rov_fighter' || projectType === 'fighter') {
+    score = Math.max(1.0, Math.min(5.0, 0.4 * avgC + 0.3 * avgA + 0.3 * avgR));
+  } else if (projectType === 'esports_rov_carry' || projectType === 'esports_rov_marksman' || projectType === 'carry' || projectType === 'marksman') {
+    score = Math.max(1.0, Math.min(5.0, 0.5 * avgC + 0.3 * (5.0 - avgN) + 0.2 * avgR));
+  } else if (projectType === 'esports_rov_tank' || projectType === 'tank') {
+    score = Math.max(1.0, Math.min(5.0, 0.4 * avgA + 0.3 * avgR + 0.3 * avgT));
+  } else if (projectType === 'esports_rov_support' || projectType === 'support') {
+    score = Math.max(1.0, Math.min(5.0, 0.4 * avgA + 0.4 * avgE + 0.2 * avgT));
+  } else if (projectType === 'rov' || projectType === 'esports_rov') {
+    score = comeback;
+  }
+
+  // Integrate manual activity evaluations into calculation
+  let evalSum = 0;
+  let evalCount = 0;
+  members.forEach(m => {
+    if (m.activity_evaluations && m.activity_evaluations.length > 0) {
+      const mSum = m.activity_evaluations.reduce((s, ev) => s + Number(ev.performance_rating), 0);
+      evalSum += mSum / m.activity_evaluations.length;
+      evalCount++;
+    }
+  });
+
+  if (evalCount > 0) {
+    const avgEval = evalSum / evalCount;
+    // Blend the manual activity rating (30% weight) with the trait-based task potential score (70% weight)
+    score = Math.max(1.0, Math.min(5.0, 0.7 * score + 0.3 * avgEval));
   }
 
   return { score, comeback };
 }
 
 // 5. Full Team Synergy Index
-export function calcTeamSynergy(members: SimProfile[], projectType: string): { synergy: number; taskPotential: number; comeback: number } {
+export function calcTeamSynergy(members: SimProfile[], projectType: string): { 
+  synergy: number; 
+  taskPotential: number; 
+  comeback: number;
+  isConflictPenaltyApplied?: boolean;
+} {
   if (members.length === 0) return { synergy: 0, taskPotential: 0.0, comeback: 0.0 };
 
   let sumCombined = 0;
@@ -661,9 +705,40 @@ export function calcTeamSynergy(members: SimProfile[], projectType: string): { s
 
   // Synergy = 0.6 * AvgCombined + 0.4 * (TaskPotential * 20)
   const rawSynergy = 0.6 * avgCombined + 0.4 * (taskPotential * 20);
-  const synergy = Math.round(rawSynergy);
+  let synergy = Math.round(rawSynergy);
 
-  return { synergy, taskPotential, comeback: comeback || 3.0 };
+  // Check for conflict penalty: placing members with active conflict_risk tag or conflict_risk_users relationship
+  let isConflictPenaltyApplied = false;
+  
+  // A general conflict flag or specific pairing conflict
+  members.forEach(m => {
+    if (m.has_conflict_risk) {
+      isConflictPenaltyApplied = true;
+    }
+    if (m.conflict_risk_users && m.conflict_risk_users.some(id => members.some(other => other.user_id === id))) {
+      isConflictPenaltyApplied = true;
+    }
+  });
+
+  if (isConflictPenaltyApplied) {
+    // 15% synergy score deduction
+    synergy = Math.round(synergy * 0.85);
+  }
+
+  return { synergy, taskPotential, comeback: comeback || 3.0, isConflictPenaltyApplied };
+}
+
+// 5.1 Voice Volatility Index (VVI) Calculation
+export function calcVoiceVolatility(
+  pitchRatio: number,
+  speechRate: number,
+  negativeKeywordDensity: number,
+  w1: number = 0.5,
+  w2: number = 0.5
+): number {
+  // VVI = (w1 * Pitch_Ratio + w2 * Speech_Rate) * (1 + Negative_Keyword_Density)
+  const rawVvi = (w1 * pitchRatio + w2 * speechRate) * (1 + negativeKeywordDensity);
+  return parseFloat(Math.max(1.0, Math.min(5.0, rawVvi)).toFixed(2));
 }
 
 // 6. Esports RoV Match Engine
@@ -974,4 +1049,181 @@ export function calcCombatDominance(
   const dominance = Math.max(15, Math.min(98, Math.round(rawDom)));
 
   return { dominance, egoPenalty: isDelusive, styleMultiplier, pressure };
+}
+
+// 8. Friction thresholds by project type
+export const FRICTION_THRESHOLDS: Record<string, number> = {
+  esports_rov: 3.20,
+  innovation: 3.80,
+  execution: 3.40,
+  crisis_management: 3.00,
+  default: 3.50
+};
+
+// 9. Helper to get threshold dynamically
+export function getFrictionThreshold(projectType: string): number {
+  if (projectType.startsWith('esports_rov') || projectType === 'rov') {
+    return FRICTION_THRESHOLDS.esports_rov;
+  }
+  return FRICTION_THRESHOLDS[projectType] || FRICTION_THRESHOLDS.default;
+}
+
+// 10. Helper to check Wu Xing balance
+export function checkWuXingBalance(members: SimProfile[]): boolean {
+  const counts: Record<string, number> = {};
+  const getEl = (str: string) => {
+    if (!str) return '';
+    if (str.includes('Wood') || str.includes('ไม้')) return 'Wood';
+    if (str.includes('Fire') || str.includes('ไฟ')) return 'Fire';
+    if (str.includes('Earth') || str.includes('ดิน')) return 'Earth';
+    if (str.includes('Metal') || str.includes('ทอง')) return 'Metal';
+    if (str.includes('Water') || str.includes('น้ำ')) return 'Water';
+    return '';
+  };
+  members.forEach(m => {
+    const el = getEl(m.chinese_element || m.thai_element || '');
+    if (el) {
+      counts[el] = (counts[el] || 0) + 1;
+    }
+  });
+  const maxAllowed = members.length <= 3 ? 2 : Math.floor(members.length * 0.6);
+  return Object.values(counts).every(c => c <= maxAllowed);
+}
+
+// 11. AI Auto-Grouping Optimization Engine (Hybrid: Exact + Heuristic SA)
+export function optimizeGroup(
+  pool: SimProfile[],
+  groupSize: number,
+  projectType: string,
+  forcedUserIds: string[] = []
+): SimProfile[] {
+  if (pool.length < groupSize) return pool;
+
+  const forcedMembers = pool.filter(m => forcedUserIds.includes(m.user_id));
+  const remainingPool = pool.filter(m => !forcedUserIds.includes(m.user_id));
+  const neededSize = groupSize - forcedMembers.length;
+
+  if (neededSize < 0) {
+    return forcedMembers.slice(0, groupSize);
+  }
+  if (neededSize === 0) {
+    return forcedMembers;
+  }
+
+  const threshold = getFrictionThreshold(projectType);
+
+  const evaluateGroup = (g: SimProfile[]): number => {
+    const avgN = g.reduce((sum, m) => sum + (m.score_n ?? 3.0), 0) / g.length;
+    if (avgN > threshold) return -1;
+
+    const hasCohesion = g.some(m => m.jungian_type === 'TJ' || m.jungian_type === 'FJ');
+    if (!hasCohesion) return -1;
+
+    if (!checkWuXingBalance(g)) return -1;
+
+    const { synergy } = calcTeamSynergy(g, projectType);
+    return synergy;
+  };
+
+  const n = remainingPool.length;
+  const k = neededSize;
+
+  const getCombinationsCount = (nVal: number, kVal: number): number => {
+    if (kVal > nVal || kVal < 0) return 0;
+    let res = 1;
+    for (let i = 1; i <= kVal; i++) {
+      res = res * (nVal - i + 1) / i;
+    }
+    return res;
+  };
+
+  const combCount = getCombinationsCount(n, k);
+  const maxExactLimit = 100000;
+
+  if (combCount > 0 && combCount <= maxExactLimit) {
+    let bestGroup: SimProfile[] = [];
+    let bestScore = -1;
+
+    const combinations: number[][] = [];
+    const generateCombinations = (start: number, current: number[]) => {
+      if (current.length === k) {
+        combinations.push([...current]);
+        return;
+      }
+      for (let i = start; i < n; i++) {
+        current.push(i);
+        generateCombinations(i + 1, current);
+        current.pop();
+      }
+    };
+    generateCombinations(0, []);
+
+    for (const indices of combinations) {
+      const candidateGroup = [...forcedMembers, ...indices.map(idx => remainingPool[idx])];
+      const score = evaluateGroup(candidateGroup);
+      if (score > bestScore) {
+        bestScore = score;
+        bestGroup = candidateGroup;
+      }
+    }
+
+    if (bestGroup.length > 0) {
+      return bestGroup;
+    }
+  }
+
+  // Heuristic (Greedy + Simulated Annealing)
+  let currentGroup = [...forcedMembers];
+  const poolCopy = [...remainingPool];
+
+  while (currentGroup.length < groupSize && poolCopy.length > 0) {
+    let bestMemberIdx = -1;
+    let bestScore = -1;
+
+    for (let i = 0; i < poolCopy.length; i++) {
+      const candidateGroup = [...currentGroup, poolCopy[i]];
+      const score = evaluateGroup(candidateGroup);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMemberIdx = i;
+      }
+    }
+
+    if (bestMemberIdx !== -1) {
+      currentGroup.push(poolCopy[bestMemberIdx]);
+      poolCopy.splice(bestMemberIdx, 1);
+    } else {
+      currentGroup.push(poolCopy[0]);
+      poolCopy.splice(0, 1);
+    }
+  }
+
+  let bestGroup = [...currentGroup];
+  let bestScore = evaluateGroup(bestGroup);
+
+  const iterations = 500;
+  let temp = 100.0;
+  const coolingRate = 0.95;
+
+  for (let iter = 0; iter < iterations; iter++) {
+    if (bestGroup.length > forcedMembers.length && poolCopy.length > 0) {
+      const groupSwapIdx = forcedMembers.length + Math.floor(Math.random() * (bestGroup.length - forcedMembers.length));
+      const poolSwapIdx = Math.floor(Math.random() * poolCopy.length);
+
+      const candidateGroup = [...bestGroup];
+      const tempMember = candidateGroup[groupSwapIdx];
+      candidateGroup[groupSwapIdx] = poolCopy[poolSwapIdx];
+
+      const score = evaluateGroup(candidateGroup);
+      const delta = score - bestScore;
+      if (score !== -1 && (delta > 0 || Math.random() < Math.exp(delta / temp))) {
+        bestScore = score;
+        bestGroup = candidateGroup;
+        poolCopy[poolSwapIdx] = tempMember;
+      }
+    }
+    temp *= coolingRate;
+  }
+
+  return bestGroup;
 }

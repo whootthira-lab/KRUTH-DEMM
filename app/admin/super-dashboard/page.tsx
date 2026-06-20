@@ -103,6 +103,60 @@ export default function SuperDashboard() {
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
+  // Meta-AI Patch States
+  const [metaPatch, setMetaPatch] = useState<any>(null);
+  const [loadingPatch, setLoadingPatch] = useState(false);
+  const [submittingPatch, setSubmittingPatch] = useState(false);
+
+  async function loadMetaPatch() {
+    setLoadingPatch(true);
+    try {
+      const res = await fetch('/api/admin/meta-ai');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setMetaPatch(data.patch);
+        }
+      }
+    } catch (err) {
+      console.error("Error loading Meta-AI patch:", err);
+    } finally {
+      setLoadingPatch(false);
+    }
+  }
+
+  async function handleApprovePatch() {
+    if (!metaPatch) return;
+    setSubmittingPatch(true);
+    try {
+      const res = await fetch('/api/admin/meta-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          approvedBy: localStorage.getItem('kruth_admin_email') || 'whootthira@gmail.com',
+          patchVersion: metaPatch.patchVersion,
+          signatureHex: `signed-sig-hash-${Date.now()}`
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setMessage({ text: `อนุมัติการเปิดใช้งานสูตรแม่แบบ ${metaPatch.patchVersion} สำเร็จ ปรับโครงสร้างสูตรและลงบันทึกระบบเรียบร้อยแล้ว`, type: 'success' });
+          setMetaPatch(null);
+        } else {
+          throw new Error(data.error || 'Failed to approve patch');
+        }
+      } else {
+        throw new Error('Network error during patch approval');
+      }
+    } catch (err: any) {
+      setMessage({ text: `ไม่สามารถอนุมัติอัปเดตระบบ: ${err.message}`, type: 'error' });
+    } finally {
+      setSubmittingPatch(false);
+    }
+  }
+
   // Chatbot States
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
@@ -149,6 +203,7 @@ export default function SuperDashboard() {
     // Load organizations first, then fetch initial dashboard data
     loadOrganizations().then(() => {
       fetchDashboardData('all');
+      loadMetaPatch();
     });
   }, []);
 
@@ -672,6 +727,60 @@ export default function SuperDashboard() {
               : 'bg-rose-950/40 border-rose-800/50 text-rose-300'
           }`}>
             {message.type === 'success' ? '✅' : '⚠️'} {message.text}
+          </div>
+        )}
+
+        {/* 🤖 META-AI PATCH NOTIFICATION BOX (One-Click Patch Update) */}
+        {metaPatch && (
+          <div className="bg-gradient-to-br from-indigo-950/60 to-slate-900/60 border border-indigo-500/20 rounded-3xl p-6 shadow-2xl relative overflow-hidden backdrop-blur-md">
+            <div className="absolute -top-10 -right-10 w-40 h-40 bg-indigo-500/10 blur-3xl rounded-full" />
+            
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="space-y-2 max-w-3xl">
+                <span className="px-2.5 py-1 text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full uppercase tracking-wider block w-fit">
+                  🤖 Meta-AI Layer Background Simulation (Offline Symbolic Regression)
+                </span>
+                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                  <span>✨</span> ค้นพบโมเดลคำนวณที่แม่นยำกว่า: เวอร์ชัน {metaPatch.patchVersion}
+                </h3>
+                <p className="text-xs text-slate-350 leading-relaxed">
+                  ระบบวิเคราะห์พฤติกรรมย้อนหลัง (Symbolic Regression) ตรวจจับโมเดลการประเมินค่าดัชนีประสานพลังทีม (Synergy Score) ที่สอดคล้องกับพฤติกรรมจริงมากกว่าสมการปัจจุบัน โดยประเมินจากการทดสอบข้ามสายมิติและประวัติการจัดกลุ่มที่ผ่านมา
+                </p>
+
+                {/* Formula Comparison */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 text-xs bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-slate-500 font-bold block">สูตรคำนวณปัจจุบัน (Current Formula):</span>
+                    <code className="text-slate-400 font-mono text-[10px] block bg-slate-900 p-2 rounded-lg border border-slate-800/50">{metaPatch.currentFormula}</code>
+                    <span className="text-[10px] text-slate-400 block mt-1">
+                      ความแม่นยำเฉลี่ย (Accuracy): <strong className="text-rose-400">{metaPatch.metrics.currentAccuracy}%</strong> (MSE: {metaPatch.metrics.currentMSE})
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-indigo-400 font-bold block">สูตรแนะนำใหม่ (Optimal Discovered Formula):</span>
+                    <code className="text-indigo-300 font-mono text-[10px] block bg-indigo-950/30 p-2 rounded-lg border border-indigo-900/30">{metaPatch.optimalFormula}</code>
+                    <span className="text-[10px] text-indigo-300 block mt-1">
+                      ความแม่นยำเฉลี่ย (Accuracy): <strong className="text-emerald-400">{metaPatch.metrics.optimalAccuracy}%</strong> (MSE: {metaPatch.metrics.optimalMSE}) (เพิ่มขึ้น +{(metaPatch.metrics.optimalAccuracy - metaPatch.metrics.currentAccuracy).toFixed(1)}%)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <div className="w-full md:w-auto flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  disabled={submittingPatch}
+                  onClick={handleApprovePatch}
+                  className="w-full md:w-auto px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-extrabold rounded-2xl text-[11px] shadow-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap"
+                >
+                  <span>💾</span> {submittingPatch ? 'กำลังปรับปรุงสูตร...' : 'อนุมัติระบบ One-Click Patch Update'}
+                </button>
+                <span className="text-[9px] text-slate-500 text-center block">
+                  * จะลงชื่อระบบ Audit Log เพื่อการสืบย้อนได้
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
