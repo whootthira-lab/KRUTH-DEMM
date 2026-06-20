@@ -101,6 +101,7 @@ export default function SuperDashboard() {
   const [newOrgCode, setNewOrgCode] = useState('');
   const [assignEmail, setAssignEmail] = useState<Record<string, string>>({});
   const [assignRole, setAssignRole] = useState<Record<string, string>>({});
+  const [assignName, setAssignName] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
@@ -242,6 +243,7 @@ export default function SuperDashboard() {
             id: adm.id,
             email: adm.email,
             role: adm.role,
+            full_name: adm.full_name || null,
             hasPasskey
           });
         }
@@ -514,6 +516,7 @@ export default function SuperDashboard() {
     if (!emailToAssign) return;
 
     const roleToAssign = assignRole[orgId] || 'org_admin';
+    const nameToAssign = assignName[orgId]?.trim() || '';
 
     setActionLoading(true);
     setMessage({ type: '', text: '' });
@@ -524,13 +527,15 @@ export default function SuperDashboard() {
         .upsert({
           org_id: orgId,
           email: emailToAssign,
-          role: roleToAssign
+          role: roleToAssign,
+          full_name: nameToAssign || null
         }, { onConflict: 'email' });
 
       if (error) throw error;
 
-      setMessage({ type: 'success', text: `มอบสิทธิ์ผู้ดูแลอีเมล "${emailToAssign}" สำเร็จ!` });
+      setMessage({ type: 'success', text: `มอบสิทธิ์ผู้ดูแล "${nameToAssign || emailToAssign}" สำเร็จ!` });
       setAssignEmail(prev => ({ ...prev, [orgId]: '' }));
+      setAssignName(prev => ({ ...prev, [orgId]: '' }));
       loadOrganizations();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'เกิดข้อผิดพลาดในการบันทึกสิทธิ์' });
@@ -1160,6 +1165,9 @@ export default function SuperDashboard() {
                           {org.admins.map((adm: any) => (
                             <div key={adm.id} className="flex items-center justify-between gap-2 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
                               <div className="flex flex-col text-left">
+                                {adm.full_name && (
+                                  <span className="font-black text-teal-300 text-[0.72rem]">{adm.full_name}</span>
+                                )}
                                 <span className="font-bold text-white text-[0.7rem] break-all">{adm.email}</span>
                                 <span className="text-[9px] text-slate-400">
                                   {adm.role === 'coach' ? '🌱 โค้ชทั่วไป' : '💼 ผู้บริหาร'}
@@ -1191,6 +1199,13 @@ export default function SuperDashboard() {
                     </td>
                     <td className="py-4">
                       <div className="flex flex-col gap-1.5 max-w-[240px] mx-auto">
+                        <input
+                          type="text"
+                          placeholder="ชื่อ-นามสกุล (สำหรับลายน้ำ)"
+                          value={assignName[org.id] || ''}
+                          onChange={e => setAssignName(prev => ({ ...prev, [org.id]: e.target.value }))}
+                          className="px-2.5 py-1 bg-slate-950/80 border border-teal-900/50 rounded-lg text-[0.7rem] focus:outline-none focus:border-teal-400 text-white placeholder-slate-500"
+                        />
                         <div className="flex gap-1">
                           <input
                             type="email"

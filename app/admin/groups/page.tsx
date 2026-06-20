@@ -146,6 +146,7 @@ export default function AdminGroupsPage() {
   const [adminUserId, setAdminUserId] = useState<string>('');
   const [adminEmail, setAdminEmail] = useState<string>('');
   const [orgId, setOrgId] = useState<string>('');
+  const [adminName, setAdminName] = useState<string>('');
   
   // OTP fallback flow states
   const [showOtpFallback, setShowOtpFallback] = useState(false);
@@ -286,6 +287,7 @@ export default function AdminGroupsPage() {
     setIsSuperAdmin(superCheck);
     setAdminEmail(email || '');
     setOrgId(orgId || '');
+    setAdminName(localStorage.getItem('kruth_admin_full_name') || '');
 
     if (!superCheck) {
       if (orgId) {
@@ -1301,7 +1303,7 @@ export default function AdminGroupsPage() {
   );
 
   return (
-    <SecurityWatermarkWrapper adminEmail={adminEmail} orgId={orgId} enabled={isVerified && !isLocked}>
+    <SecurityWatermarkWrapper adminEmail={adminEmail} adminName={adminName} orgId={orgId} enabled={isVerified && !isLocked}>
       <div className="min-h-screen bg-gray-50 py-8 px-4 font-sans text-gray-800">
       <div className="max-w-6xl mx-auto space-y-6">
         

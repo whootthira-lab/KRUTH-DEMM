@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 interface SecurityWatermarkWrapperProps {
   children: React.ReactNode;
   adminEmail: string;
+  adminName: string;
   orgId: string;
   enabled: boolean;
 }
@@ -11,6 +12,7 @@ interface SecurityWatermarkWrapperProps {
 export default function SecurityWatermarkWrapper({
   children,
   adminEmail,
+  adminName,
   orgId,
   enabled
 }: SecurityWatermarkWrapperProps) {
@@ -158,7 +160,10 @@ export default function SecurityWatermarkWrapper({
   }
 
   // 6. Generate SVG string and encode it for watermark background
-  const watermarkText = `${adminEmail} | IP: ${ipAddress} | ${currentDateTime}`;
+  // Display: ชื่อ-นามสกุล (if available) | email | IP | วันที่เปิดดู
+  const watermarkText = adminName?.trim()
+    ? `${adminName.trim()} | ${adminEmail} | IP: ${ipAddress} | ${currentDateTime}`
+    : `${adminEmail} | IP: ${ipAddress} | ${currentDateTime}`;
   
   // Dynamic inline SVG with diagonal text rotated -25 degrees
   const svgString = `
@@ -231,7 +236,7 @@ export default function SecurityWatermarkWrapper({
               เนื่องจากระบบตรวจพบความพยายามเปลี่ยนหน้าจอหรือการเปลี่ยนโฟกัส เพื่อป้องกันภัยความมั่นคงและข้อมูลรั่วไหล กรุณากลับมายังแท็บหลักเพื่อปลดล็อกการเบลอ
             </p>
             <div className="text-[10px] text-gray-400 bg-gray-50 p-2 rounded-xl">
-              การสลับแท็บ/ลดหน้าจอจะถูกบันทึกในประวัตินิติวิทยาศาสตร์ (Audit Logs)
+              การสลับแท็บ/ลดหน้าจอจะถูกบันทึกในประวัตินิติวิทยาศาสตร์ พร้อมระบุชื่อ: <span className="font-bold text-gray-600">{adminName?.trim() || adminEmail}</span>
             </div>
           </div>
         </div>

@@ -54,6 +54,7 @@ export default function AdminLogin() {
       localStorage.setItem('kruth_admin_email', trimmedEmail);
       localStorage.setItem('kruth_admin_role', role);
       localStorage.setItem('kruth_admin_org_name', orgName);
+      localStorage.setItem('kruth_admin_full_name', adminData.full_name || '');
       
       if (!isSuper) {
         localStorage.setItem('kruth_admin_org_id', adminData.org_id);
