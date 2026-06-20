@@ -263,7 +263,18 @@ export default function AdminGroupsPage() {
     const role = localStorage.getItem('kruth_admin_role');
     const orgId = localStorage.getItem('kruth_admin_org_id');
 
-    if (!email || (role !== 'org_admin' && role !== 'super_admin')) {
+    if (!email) {
+      router.push('/admin');
+      return;
+    }
+
+    if (role === 'coach') {
+      alert('🔒 สิทธิ์โค้ชทั่วไป (Standard) ของท่าน ไม่ได้รับอนุญาตให้เข้าใช้หน้าจอปรับการจัดกลุ่มย่อยเวิร์กชอป');
+      router.push('/admin/dashboard');
+      return;
+    }
+
+    if (role !== 'org_admin' && role !== 'super_admin') {
       router.push('/admin');
       return;
     }

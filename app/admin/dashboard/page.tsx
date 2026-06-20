@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 // นำเข้าแพ็กเกจสำหรับวาดกราฟ
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { usePrivacyTimeout } from '@/hooks/usePrivacyTimeout';
+import { registerPasskey, authenticatePasskey } from '@/lib/webauthn-client';
 
 interface LevelBarProps {
   label: string;
@@ -29,39 +31,29 @@ function LevelBar({ label, counts, total }: LevelBarProps) {
         <span className="text-[10px] text-gray-400">ผู้ประเมิน {total} คน</span>
       </div>
       
+      {/* Stacked bar */}
       <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden flex">
-        {pctG > 0 && <div className="bg-emerald-500 h-full" style={{ width: `${pctG}%` }} title={`ปกติ/เสี่ยงต่ำ: ${pctG}%`} />}
+        {pctG > 0 && <div className="bg-emerald-500 h-full" style={{ width: `${pctG}%` }} title={`ปกติ: ${pctG}%`} />}
         {pctY > 0 && <div className="bg-amber-400 h-full" style={{ width: `${pctY}%` }} title={`เฝ้าระวัง: ${pctY}%`} />}
         {pctO > 0 && <div className="bg-orange-500 h-full" style={{ width: `${pctO}%` }} title={`เสี่ยงสูง: ${pctO}%`} />}
-        {pctR > 0 && <div className="bg-rose-600 h-full" style={{ width: `${pctR}%` }} title={`เสี่ยงวิกฤต: ${pctR}%`} />}
+        {pctR > 0 && <div className="bg-rose-500 h-full" style={{ width: `${pctR}%` }} title={`เสี่ยงวิกฤต: ${pctR}%`} />}
       </div>
 
-      <div className="grid grid-cols-4 gap-1 text-[8px] font-bold text-gray-500">
-        <div className="flex flex-col items-center border-r border-gray-100">
-          <span className="text-emerald-600">🟢 ปกติ</span>
-          <span>{green} ({pctG}%)</span>
-        </div>
-        <div className="flex flex-col items-center border-r border-gray-100">
-          <span className="text-amber-500">🟡 ระวัง</span>
-          <span>{yellow} ({pctY}%)</span>
-        </div>
-        <div className="flex flex-col items-center border-r border-gray-100">
-          <span className="text-orange-500">🟠 เสี่ยง</span>
-          <span>{orange} ({pctO}%)</span>
-        </div>
-        <div className="flex flex-col items-center">
-          <span className="text-rose-600">🔴 วิกฤต</span>
-          <span>{red} ({pctR}%)</span>
-        </div>
+      {/* Legend */}
+      <div className="grid grid-cols-4 gap-1 text-[9px] text-gray-500 font-semibold text-center pt-1 border-t border-gray-50">
+        <div>🟢 {green} คน</div>
+        <div>🟡 {yellow} คน</div>
+        <div>🟠 {orange} คน</div>
+        <div className="text-rose-600 font-bold">🔴 {red} คน</div>
       </div>
     </div>
   );
 }
 
-export default function AdminDashboard() {
+export default function ExecutiveDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [orgName, setOrgName] = useState('สกร. ระดับอำเภอด่านขุนทด');
+  const [orgName, setOrgName] = useState('กำลังโหลด...');
   const [stats, setStats] = useState({ total: 0, today: 0 });
   const [quadrantData, setQuadrantData] = useState<any[]>([]);
   const [topArchetypes, setTopArchetypes] = useState<any[]>([]);
@@ -78,6 +70,21 @@ export default function AdminDashboard() {
   const [execOptions, setExecOptions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  
+  // 🔒 Security & Zero-Trust Privacy States
+  const [isVerified, setIsVerified] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [userRole, setUserRole] = useState<string>('org_admin');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [adminUserId, setAdminUserId] = useState<string>('');
+  
+  // OTP fallback flow states
+  const [showOtpFallback, setShowOtpFallback] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [enteredOtp, setEnteredOtp] = useState('');
+  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [devOtpCode, setDevOtpCode] = useState('');
 
   // 🧠 Wellness & Risk States
   const [kwiData, setKwiData] = useState<any[]>([]);
@@ -329,26 +336,224 @@ export default function AdminDashboard() {
   // โทนสีของ KRUTH DEMM สำหรับกราฟ
   const COLORS = ['#1A3A5C', '#2E75B6', '#F59E0B', '#10B981', '#8B5CF6'];
 
+  // 🔒 Zero-Trust Inactivity & Tab-Switching Lock hook
+  usePrivacyTimeout({
+    isActive: isVerified && !isLocked && userRole !== 'coach',
+    onTimeout: () => {
+      setIsLocked(true);
+    }
+  });
+
+  // 🔒 Zero-Trust Audit Logging helper
+  async function writeAuditLog(targetMemberId?: string, actionName: string = 'EXECUTIVE_DASHBOARD_ACCESS') {
+    try {
+      const email = localStorage.getItem('kruth_admin_email') || 'unknown';
+      const orgId = localStorage.getItem('kruth_admin_org_id') || 'unknown';
+      if (orgId === 'unknown') return;
+
+      const payload = {
+        executive_id: email,
+        org_id: orgId,
+        target_member_id: targetMemberId,
+        access_granted_to: actionName
+      };
+
+      const res = await fetch('/api/audit/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        console.error('Audit log failed:', data.error);
+      }
+    } catch (e) {
+      console.error('Audit log error:', e);
+    }
+  }
+
+  // 🔒 Passkey authentication logic
+  const handlePasskeyUnlock = async () => {
+    setAuthError(null);
+    try {
+      const email = localStorage.getItem('kruth_admin_email');
+      if (!email) {
+        setAuthError('ไม่พบอีเมลผู้ใช้งานในระบบ');
+        return;
+      }
+
+      let resolvedUserId = adminUserId;
+      if (!resolvedUserId) {
+        const { data: uData } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
+        if (uData) {
+          resolvedUserId = uData.id;
+        } else {
+          const { data: aData } = await supabase.from('org_admins').select('id').eq('email', email).maybeSingle();
+          resolvedUserId = aData ? aData.id : email;
+        }
+        setAdminUserId(resolvedUserId);
+      }
+
+      const verified = await authenticatePasskey(resolvedUserId);
+      if (verified) {
+        setIsVerified(true);
+        setIsLocked(false);
+        writeAuditLog(resolvedUserId, 'EXECUTIVE_GATEWAY_UNLOCK_PASSKEY');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAuthError(err.message || 'การยืนยันตัวตนด้วย Passkey ล้มเหลว');
+    }
+  };
+
+  // 🔒 Email OTP request logic
+  const handleRequestOtp = async () => {
+    setAuthError(null);
+    setOtpLoading(true);
+    try {
+      const email = localStorage.getItem('kruth_admin_email');
+      if (!email) {
+        setAuthError('ไม่พบอีเมลผู้ใช้งานในระบบ');
+        return;
+      }
+
+      const res = await fetch('/api/auth/otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', email })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'ไม่สามารถส่งรหัส OTP ได้');
+      }
+
+      setOtpSent(true);
+      setOtpAttempts(0);
+      if (data.devOtp) {
+        setDevOtpCode(data.devOtp);
+      }
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // 🔒 Email OTP verification logic
+  const handleVerifyOtp = async () => {
+    setAuthError(null);
+    setOtpLoading(true);
+    try {
+      if (!enteredOtp.trim()) {
+        setAuthError('กรุณากรอกรหัส OTP');
+        return;
+      }
+
+      const res = await fetch('/api/auth/otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', enteredOtp: enteredOtp.trim() })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        setOtpAttempts(data.attempts || 0);
+        if (data.attempts >= 3) {
+          setOtpSent(false);
+          setEnteredOtp('');
+          throw new Error('คุณกรอกรหัสผิดครบ 3 ครั้งแล้ว กรุณากดขอรหัสใหม่');
+        }
+        throw new Error(data.error || 'รหัส OTP ไม่ถูกต้อง');
+      }
+
+      if (data.verified) {
+        setIsVerified(true);
+        setIsLocked(false);
+        setOtpSent(false);
+        setEnteredOtp('');
+        setShowOtpFallback(false);
+        writeAuditLog(undefined, 'EXECUTIVE_GATEWAY_UNLOCK_OTP');
+      }
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // 🔒 Passkey device registration helper
+  const handleRegisterPasskey = async () => {
+    try {
+      const email = localStorage.getItem('kruth_admin_email');
+      if (!email) return;
+
+      let resolvedUserId = adminUserId;
+      if (!resolvedUserId) {
+        const { data: uData } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
+        if (uData) {
+          resolvedUserId = uData.id;
+        } else {
+          const { data: aData } = await supabase.from('org_admins').select('id').eq('email', email).maybeSingle();
+          resolvedUserId = aData ? aData.id : email;
+        }
+        setAdminUserId(resolvedUserId);
+      }
+
+      await registerPasskey(resolvedUserId);
+      alert('🎉 ลงทะเบียนอุปกรณ์นี้ด้วย Passkey เรียบร้อยแล้ว! สามารถใช้สแกนใบหน้า/นิ้วมือเพื่อปลดล็อกในครั้งถัดไป');
+      writeAuditLog(resolvedUserId, 'EXECUTIVE_PASSKEY_DEVICE_REGISTER');
+    } catch (err: any) {
+      console.error(err);
+      alert('เกิดข้อผิดพลาดในการลงทะเบียน Passkey: ' + err.message);
+    }
+  };
+
   useEffect(() => {
     // Access Control check
     const email = localStorage.getItem('kruth_admin_email');
     const orgId = localStorage.getItem('kruth_admin_org_id');
     const storedOrgName = localStorage.getItem('kruth_admin_org_name');
-    const role = localStorage.getItem('kruth_admin_role');
+    const role = localStorage.getItem('kruth_admin_role') || 'org_admin';
 
-    // Allow both regular org_admin and super_admin (who impersonates an orgId)
-    if (!email || !orgId || (role !== 'org_admin' && role !== 'super_admin')) {
+    // Allow regular org_admin, super_admin and coach
+    if (!email || !orgId || (role !== 'org_admin' && role !== 'super_admin' && role !== 'coach')) {
       router.push('/admin');
       return;
     }
 
+    setUserRole(role);
     setIsSuperAdmin(role === 'super_admin');
+    
+    if (role === 'coach') {
+      setIsLocked(false);
+      setIsVerified(true);
+    } else {
+      setIsLocked(true);
+      setIsVerified(false);
+    }
 
     if (storedOrgName) {
       setOrgName(storedOrgName);
     }
 
     fetchDashboardData(orgId);
+
+    // Zero-Trust lookup for userId to support WebAuthn
+    if (email) {
+      supabase.from('users').select('id').eq('email', email).maybeSingle().then(({ data: uData }) => {
+        if (uData) {
+          setAdminUserId(uData.id);
+        } else {
+          supabase.from('org_admins').select('id').eq('email', email).maybeSingle().then(({ data: aData }) => {
+            if (aData) {
+              setAdminUserId(aData.id);
+            } else {
+              setAdminUserId(email);
+            }
+          });
+        }
+      });
+    }
   }, []);
 
   const openExecChat = async () => {
@@ -730,8 +935,33 @@ export default function AdminDashboard() {
                 ⬅️ กลับหน้า Super Admin
               </button>
             )}
+            {userRole !== 'coach' && (
+              <>
+                <button 
+                  onClick={() => router.push('/admin/groups')} 
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all"
+                >
+                  👥 จัดการกลุ่มย่อย
+                </button>
+                <button 
+                  onClick={handleRegisterPasskey}
+                  className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <span>🔑</span> ผูกอุปกรณ์ Passkey
+                </button>
+              </>
+            )}
             <button onClick={() => fetchDashboardData()} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm font-bold transition-colors">
               🔄 รีเฟรชข้อมูล
+            </button>
+            <button 
+              onClick={() => {
+                localStorage.clear();
+                router.push('/admin');
+              }} 
+              className="bg-rose-950/40 hover:bg-rose-900/40 text-rose-400 border border-rose-900/30 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+            >
+              🚪 ออกจากระบบ
             </button>
           </div>
         </div>
@@ -1014,10 +1244,10 @@ export default function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 font-semibold text-gray-700">
-                      {fb.target_desc}
+                      {fb.target_role === 'individual' && userRole === 'coach' ? '🔒 [ข้อมูลถูกปิดบังโดยระบบความปลอดภัย]' : fb.target_desc}
                     </td>
-                    <td className="px-6 py-4 text-xs text-gray-600 max-w-xs truncate" title={fb.q1_answer}>
-                      {fb.q1_answer}
+                    <td className="px-6 py-4 text-xs text-gray-600 max-w-xs truncate" title={fb.target_role === 'individual' && userRole === 'coach' ? 'ข้อมูลถูกปิดบัง' : fb.q1_answer}>
+                      {fb.target_role === 'individual' && userRole === 'coach' ? '🔒 ข้อมูลถูกจำกัดสิทธิ์การเข้าถึง' : fb.q1_answer}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
@@ -1038,8 +1268,8 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-xs text-gray-500 max-w-xs truncate" title={fb.q3_answer}>
-                      {fb.q3_answer || '-'}
+                    <td className="px-6 py-4 text-xs text-gray-500 max-w-xs truncate" title={fb.target_role === 'individual' && userRole === 'coach' ? 'ข้อมูลถูกปิดบัง' : fb.q3_answer}>
+                      {fb.target_role === 'individual' && userRole === 'coach' ? '🔒 ข้อมูลถูกจำกัดสิทธิ์การเข้าถึง' : (fb.q3_answer || '-')}
                     </td>
                     <td className="px-6 py-4 text-xs text-gray-400">
                       {new Date(fb.created_at).toLocaleString('th-TH')}
@@ -1502,26 +1732,28 @@ export default function AdminDashboard() {
                     >
                       👥 รายทีม (Team)
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const firstMember = membersList[0];
-                        const firstMemberName = firstMember ? ((firstMember.users as any)?.full_name || `พนักงานรหัส ${firstMember.user_id.slice(0, 5)}`) : '';
-                        setFeedbackForm(prev => ({
-                          ...prev,
-                          targetType: 'individual',
-                          targetUserId: firstMember?.user_id || '',
-                          targetName: firstMemberName
-                        }));
-                      }}
-                      className={`py-2 px-4 rounded-xl text-xs font-bold transition-all border ${
-                        feedbackForm.targetType === 'individual'
-                          ? 'bg-purple-50 border-purple-500 text-purple-800'
-                          : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      👤 รายบุคคล (Individual)
-                    </button>
+                    {userRole !== 'coach' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const firstMember = membersList[0];
+                          const firstMemberName = firstMember ? ((firstMember.users as any)?.full_name || `พนักงานรหัส ${firstMember.user_id.slice(0, 5)}`) : '';
+                          setFeedbackForm(prev => ({
+                            ...prev,
+                            targetType: 'individual',
+                            targetUserId: firstMember?.user_id || '',
+                            targetName: firstMemberName
+                          }));
+                        }}
+                        className={`py-2 px-4 rounded-xl text-xs font-bold transition-all border ${
+                          feedbackForm.targetType === 'individual'
+                            ? 'bg-purple-50 border-purple-500 text-purple-800'
+                            : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        👤 รายบุคคล (Individual)
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1786,6 +2018,126 @@ export default function AdminDashboard() {
           <span className="text-base">💼</span> ปรึกษา Executive AI Coach
         </button>
       </div>
+
+      {/* 🔒 Zero-Trust Security Lock Screen Overlay */}
+      {isLocked && userRole !== 'coach' && (
+        <div className="fixed inset-0 bg-[#030712]/95 backdrop-blur-xl z-[300] flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-[#0b0f19] border border-slate-800 rounded-3xl shadow-2xl overflow-hidden p-8 text-center space-y-6 animate-fade-in">
+            <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-rose-600/10 to-indigo-600/10 border border-slate-800/80 flex items-center justify-center text-4xl shadow-inner relative">
+              <div className="absolute inset-0 rounded-full bg-rose-500/5 animate-pulse" />
+              🛡️
+            </div>
+
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-black text-white tracking-wide">ระบบความปลอดภัย Zero-Trust</h2>
+              <p className="text-xs text-slate-400">กรุณายืนยันตัวตนระดับบริหารเพื่อปลดล็อกสิทธิ์การเข้าถึงแดชบอร์ด</p>
+            </div>
+
+            {authError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-semibold text-left">
+                ⚠️ {authError}
+              </div>
+            )}
+
+            {!showOtpFallback ? (
+              <div className="space-y-4">
+                <button
+                  onClick={handlePasskeyUnlock}
+                  className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
+                >
+                  <span>🔑</span> สแกน Passkey (Face ID/Fingerprint)
+                </button>
+                <div className="text-xs text-slate-500 border-t border-slate-800/80 pt-4 flex items-center justify-between">
+                  <span>ไม่มีอุปกรณ์ Passkey?</span>
+                  <button 
+                    onClick={() => {
+                      setShowOtpFallback(true);
+                      setAuthError(null);
+                    }}
+                    className="text-indigo-400 hover:underline font-bold"
+                  >
+                    ใช้รหัสยืนยัน Email OTP ✉️
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4 text-left">
+                {!otpSent ? (
+                  <div className="space-y-3">
+                    <div className="text-left space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">อีเมลสำหรับรับรหัส OTP</label>
+                      <input
+                        type="text"
+                        value={localStorage.getItem('kruth_admin_email') || ''}
+                        disabled
+                        className="w-full bg-slate-900 border border-slate-800 text-slate-400 px-3.5 py-2.5 rounded-xl text-xs outline-none"
+                      />
+                    </div>
+                    <button
+                      onClick={handleRequestOtp}
+                      disabled={otpLoading}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-colors disabled:bg-slate-850"
+                    >
+                      {otpLoading ? 'กำลังส่งรหัส...' : '✉️ ส่งรหัส OTP ไปยังอีเมล'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="text-left space-y-1">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">กรอกรหัสยืนยัน 6 หลัก</label>
+                        {devOtpCode && (
+                          <span className="text-[9px] text-teal-400 font-bold bg-teal-950 px-1.5 py-0.5 rounded">
+                            Dev Code: {devOtpCode}
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={enteredOtp}
+                        onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, ''))}
+                        placeholder="••••••"
+                        className="w-full bg-slate-900 border border-slate-800 text-slate-100 text-center tracking-widest text-lg font-bold px-3.5 py-2.5 rounded-xl outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <button
+                      onClick={handleVerifyOtp}
+                      disabled={otpLoading || enteredOtp.length !== 6}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-colors disabled:bg-slate-850"
+                    >
+                      {otpLoading ? 'กำลังตรวจสอบ...' : '🔓 ปลดล็อกระบบ'}
+                    </button>
+                    
+                    <div className="flex justify-between items-center text-[10px] text-slate-500 pt-2">
+                      <button 
+                        onClick={handleRequestOtp}
+                        className="hover:underline text-indigo-400 font-semibold"
+                      >
+                        ขอรหัส OTP อีกครั้ง
+                      </button>
+                      <span>เหลือโอกาสกรอกอีก {3 - otpAttempts} ครั้ง</span>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="border-t border-slate-800/80 pt-4 flex items-center justify-start">
+                  <button 
+                    onClick={() => {
+                      setShowOtpFallback(false);
+                      setOtpSent(false);
+                      setAuthError(null);
+                    }}
+                    className="text-slate-500 hover:text-slate-400 text-xs font-semibold flex items-center gap-1"
+                  >
+                    ← กลับไปใช้ Passkey
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );

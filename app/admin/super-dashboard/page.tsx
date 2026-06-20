@@ -9,7 +9,7 @@ interface Organization {
   name: string;
   org_code: string;
   created_at: string;
-  admin_email?: string;
+  admins: { id: string; email: string; role: string; hasPasskey: boolean }[];
 }
 
 interface LevelBarProps {
@@ -100,6 +100,7 @@ export default function SuperDashboard() {
   const [newOrgName, setNewOrgName] = useState('');
   const [newOrgCode, setNewOrgCode] = useState('');
   const [assignEmail, setAssignEmail] = useState<Record<string, string>>({});
+  const [assignRole, setAssignRole] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
@@ -225,16 +226,30 @@ export default function SuperDashboard() {
         .from('org_admins')
         .select('*');
 
-      const adminMap: Record<string, string> = {};
+      const { data: dbCreds } = await supabase
+        .from('user_passkey_credentials')
+        .select('user_id');
+
+      const registeredUserIds = new Set((dbCreds || []).map(c => c.user_id));
+
+      const adminsMap: Record<string, any[]> = {};
       (dbAdmins || []).forEach(adm => {
         if (adm.org_id) {
-          adminMap[adm.org_id] = adm.email;
+          if (!adminsMap[adm.org_id]) adminsMap[adm.org_id] = [];
+          
+          const hasPasskey = registeredUserIds.has(adm.id) || registeredUserIds.has(adm.email);
+          adminsMap[adm.org_id].push({
+            id: adm.id,
+            email: adm.email,
+            role: adm.role,
+            hasPasskey
+          });
         }
       });
 
       const mappedOrgs = (dbOrgs || []).map((o: any) => ({
         ...o,
-        admin_email: adminMap[o.id] || 'ยังไม่มีแอดมิน'
+        admins: adminsMap[o.id] || []
       }));
       setOrgs(mappedOrgs);
       setStats(prev => ({ ...prev, totalOrgs: dbOrgs?.length || 0 }));
@@ -498,6 +513,8 @@ export default function SuperDashboard() {
     const emailToAssign = assignEmail[orgId]?.trim().toLowerCase();
     if (!emailToAssign) return;
 
+    const roleToAssign = assignRole[orgId] || 'org_admin';
+
     setActionLoading(true);
     setMessage({ type: '', text: '' });
 
@@ -507,16 +524,53 @@ export default function SuperDashboard() {
         .upsert({
           org_id: orgId,
           email: emailToAssign,
-          role: 'org_admin'
+          role: roleToAssign
         }, { onConflict: 'email' });
 
       if (error) throw error;
 
-      setMessage({ type: 'success', text: `มอบสิทธิ์แอดมินอีเมล "${emailToAssign}" สำเร็จ!` });
+      setMessage({ type: 'success', text: `มอบสิทธิ์ผู้ดูแลอีเมล "${emailToAssign}" สำเร็จ!` });
       setAssignEmail(prev => ({ ...prev, [orgId]: '' }));
       loadOrganizations();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'เกิดข้อผิดพลาดในการบันทึกสิทธิ์' });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // Action: Reset Passkey
+  async function handleResetPasskey(adminId: string, email: string) {
+    const ok = window.confirm(`คุณต้องการล้างอุปกรณ์ Passkey ของ "${email}" ใช่หรือไม่?\n(ผู้ใช้จะกลับไปใช้การตรวจสอบสิทธิ์แบบ OTP ชั่วคราวเพื่อผูกอุปกรณ์ใหม่)`);
+    if (!ok) return;
+
+    setActionLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const { data: uData } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+
+      const userIdsToDelete = [adminId, email];
+      if (uData) {
+        userIdsToDelete.push(uData.id);
+      }
+
+      const { error } = await supabase
+        .from('user_passkey_credentials')
+        .delete()
+        .in('user_id', userIdsToDelete);
+
+      if (error) throw error;
+
+      setMessage({ type: 'success', text: `ล้างข้อมูล Passkey ของ "${email}" เรียบร้อยแล้ว` });
+      loadOrganizations();
+    } catch (err: any) {
+      console.error(err);
+      setMessage({ type: 'error', text: err.message || 'เกิดข้อผิดพลาดในการล้างอุปกรณ์' });
     } finally {
       setActionLoading(false);
     }
@@ -1086,8 +1140,8 @@ export default function SuperDashboard() {
                 <tr className="border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider font-sans">
                   <th className="pb-3 pl-2">ชื่อหน่วยงาน</th>
                   <th className="pb-3">รหัสอ้างอิง</th>
-                  <th className="pb-3">อีเมลแอดมินปัจจุบัน</th>
-                  <th className="pb-3 text-center">มอบสิทธิ์แอดมิน</th>
+                  <th className="pb-3">ผู้ดูแลระบบปัจจุบัน (และไอคอน Passkey)</th>
+                  <th className="pb-3 text-center">มอบสิทธิ์แอดมิน / โค้ช</th>
                   <th className="pb-3 text-right pr-2">การจัดการ</th>
                 </tr>
               </thead>
@@ -1097,30 +1151,70 @@ export default function SuperDashboard() {
                     <td className="py-4 pl-2 font-bold text-white">{org.name}</td>
                     <td className="py-4 font-mono text-[0.7rem] text-blue-400">{org.org_code}</td>
                     <td className="py-4">
-                      <span className={`px-2.5 py-1 rounded-full font-semibold text-[0.7rem] ${
-                        org.admin_email === 'ยังไม่มีแอดมิน'
-                          ? 'bg-amber-950/40 text-amber-400 border border-amber-900/30'
-                          : 'bg-teal-950/40 text-teal-400 border border-teal-900/30'
-                      }`}>
-                        {org.admin_email}
-                      </span>
+                      {org.admins.length === 0 ? (
+                        <span className="px-2.5 py-1 rounded-full font-semibold text-[0.7rem] bg-amber-950/40 text-amber-400 border border-amber-900/30">
+                          ยังไม่มีผู้ดูแล
+                        </span>
+                      ) : (
+                        <div className="flex flex-col gap-1.5 max-w-[280px]">
+                          {org.admins.map((adm: any) => (
+                            <div key={adm.id} className="flex items-center justify-between gap-2 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+                              <div className="flex flex-col text-left">
+                                <span className="font-bold text-white text-[0.7rem] break-all">{adm.email}</span>
+                                <span className="text-[9px] text-slate-400">
+                                  {adm.role === 'coach' ? '🌱 โค้ชทั่วไป' : '💼 ผู้บริหาร'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold whitespace-nowrap ${
+                                  adm.hasPasskey 
+                                    ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-900/50' 
+                                    : 'bg-slate-800 text-slate-500 border border-slate-700/50'
+                                }`}>
+                                  {adm.hasPasskey ? '🔑 ผูกแล้ว' : '❌ ยังไม่ผูก'}
+                                </span>
+                                {adm.hasPasskey && (
+                                  <button
+                                    onClick={() => handleResetPasskey(adm.id, adm.email)}
+                                    disabled={actionLoading}
+                                    className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-[8px] font-bold transition-all"
+                                    title="ล้างข้อมูล Passkey เพื่อให้ลงทะเบียนอุปกรณ์ชิ้นใหม่ได้"
+                                  >
+                                    ล้าง
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="py-4">
-                      <div className="flex items-center gap-1 justify-center max-w-[240px] mx-auto">
-                        <input
-                          type="email"
-                          placeholder="ระบุอีเมลใหม่"
-                          value={assignEmail[org.id] || ''}
-                          onChange={e => setAssignEmail(prev => ({ ...prev, [org.id]: e.target.value }))}
-                          className="px-2.5 py-1 bg-slate-950/80 border border-slate-800 rounded-lg text-[0.7rem] focus:outline-none focus:border-teal-500 text-white placeholder-slate-600"
-                        />
-                        <button
-                          onClick={() => handleAssignAdmin(org.id)}
-                          disabled={actionLoading}
-                          className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-[0.7rem] font-bold transition-all"
+                      <div className="flex flex-col gap-1.5 max-w-[240px] mx-auto">
+                        <div className="flex gap-1">
+                          <input
+                            type="email"
+                            placeholder="ระบุอีเมลผู้ดูแล"
+                            value={assignEmail[org.id] || ''}
+                            onChange={e => setAssignEmail(prev => ({ ...prev, [org.id]: e.target.value }))}
+                            className="flex-1 px-2.5 py-1 bg-slate-950/80 border border-slate-800 rounded-lg text-[0.7rem] focus:outline-none focus:border-teal-500 text-white placeholder-slate-600"
+                          />
+                          <button
+                            onClick={() => handleAssignAdmin(org.id)}
+                            disabled={actionLoading}
+                            className="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-[0.7rem] font-bold transition-all"
+                          >
+                            ยืนยัน
+                          </button>
+                        </div>
+                        <select
+                          value={assignRole[org.id] || 'org_admin'}
+                          onChange={e => setAssignRole(prev => ({ ...prev, [org.id]: e.target.value }))}
+                          className="px-2 py-1 bg-slate-950/80 border border-slate-800 rounded-lg text-[0.7rem] focus:outline-none focus:border-teal-500 text-slate-350"
                         >
-                          ยืนยัน
-                        </button>
+                          <option value="org_admin">💼 ผู้บริหารสูงสุด (ZT)</option>
+                          <option value="coach">🌱 โค้ชทั่วไป (Standard)</option>
+                        </select>
                       </div>
                     </td>
                     <td className="py-4 text-right pr-2">

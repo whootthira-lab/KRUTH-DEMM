@@ -45,9 +45,9 @@ export default function AdminLogin() {
         return;
       }
 
-      // 3. Determine if it is a Super Admin or Org Admin
+      // 3. Determine if it is a Super Admin, Org Admin, or Coach
       const isSuper = adminData.role === 'super_admin' || trimmedEmail === 'whootthira@gmail.com';
-      const role = isSuper ? 'super_admin' : 'org_admin';
+      const role = isSuper ? 'super_admin' : (adminData.role === 'coach' ? 'coach' : 'org_admin');
       const orgName = isSuper ? 'ส่วนกลาง (Super Admin)' : (adminData.organizations as any)?.name || 'ผู้ดูแลหน่วยงาน';
 
       // 4. Save admin credentials to localStorage
