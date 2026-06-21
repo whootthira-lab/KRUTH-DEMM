@@ -2110,26 +2110,26 @@ export default function ExecutiveDashboard() {
                     {/* 📧 Instruction banner */}
                     <div className="bg-indigo-950/60 border border-indigo-800/50 rounded-xl p-3 text-[11px] text-indigo-200 leading-relaxed">
                       <p className="font-bold text-indigo-300 mb-1">📧 รหัส OTP ถูกส่งไปยังอีเมลแล้ว</p>
-                      <p>กรุณาเปิดอีเมลและ <strong>กรอกรหัส 6 หลัก</strong> ในช่องด้านล่าง</p>
-                      <p className="text-indigo-400 mt-1 text-[10px]">⚠️ อย่ากดลิงก์ในอีเมล — ให้ใช้รหัสตัวเลข 6 หลักเท่านั้น</p>
+                      <p>กรุณาเปิดอีเมลและ <strong>กรอกรหัสยืนยัน (6-10 หลัก)</strong> ในช่องด้านล่าง</p>
+                      <p className="text-indigo-400 mt-1 text-[10px]">⚠️ อย่ากดลิงก์ในอีเมล — ให้ใช้รหัสตัวเลข OTP เท่านั้น</p>
                     </div>
                     <div className="text-left space-y-1">
                       <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">กรอกรหัสยืนยัน 6 หลักจากอีเมล</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">กรอกรหัสยืนยันจากอีเมล</label>
                         {/* Dev OTP code display removed — real email OTP is now used */}
                       </div>
                       <input
                         type="text"
-                        maxLength={6}
+                        maxLength={10}
                         value={enteredOtp}
-                        onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, ''))}
-                        placeholder="••••••"
+                        onChange={e => setEnteredOtp(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                        placeholder="กรอกรหัส OTP ที่ได้รับ"
                         className="w-full bg-slate-900 border border-slate-800 text-slate-100 text-center tracking-widest text-lg font-bold px-3.5 py-2.5 rounded-xl outline-none focus:border-indigo-500"
                       />
                     </div>
                     <button
                       onClick={handleVerifyOtp}
-                      disabled={otpLoading || enteredOtp.length !== 6}
+                      disabled={otpLoading || enteredOtp.length < 6 || enteredOtp.length > 10}
                       className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-colors disabled:bg-slate-850"
                     >
                       {otpLoading ? 'กำลังตรวจสอบ...' : '🔓 ปลดล็อกระบบ'}
