@@ -105,6 +105,17 @@ export default function SuperDashboard() {
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
+  useEffect(() => {
+    if (message.text) {
+      if (message.type === 'success') {
+        alert(`✅ สำเร็จ:\n${message.text}`);
+      } else if (message.type === 'error') {
+        alert(`⚠️ ข้อผิดพลาด:\n${message.text}`);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [message]);
+
   // Meta-AI Patch States
   const [metaPatch, setMetaPatch] = useState<any>(null);
   const [loadingPatch, setLoadingPatch] = useState(false);
