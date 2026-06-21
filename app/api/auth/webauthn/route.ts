@@ -33,14 +33,40 @@ export async function GET(request: Request) {
 
     if (action === 'generate-registration-options') {
       // 1. Get user email/name from database
+      let fullName = 'Admin';
       const { data: user, error: uErr } = await supabase
         .from('users')
         .select('full_name')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (uErr || !user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      if (user) {
+        fullName = user.full_name;
+      } else {
+        // Fallback: check org_admins table by ID
+        const { data: admin, error: aErr } = await supabase
+          .from('org_admins')
+          .select('full_name, email')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (admin) {
+          fullName = admin.full_name || admin.email;
+        } else {
+          // Fallback 2: check org_admins by email string (if userId is email)
+          const { data: adminByEmail } = await supabase
+            .from('org_admins')
+            .select('full_name, email')
+            .eq('email', userId)
+            .maybeSingle();
+
+          if (adminByEmail) {
+            fullName = adminByEmail.full_name || adminByEmail.email;
+          } else {
+            console.error('[WebAuthn Registration] User not found for ID/Email:', userId);
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+          }
+        }
       }
 
       // 2. Fetch existing credentials to exclude
@@ -59,8 +85,8 @@ export async function GET(request: Request) {
         rpName: 'KRUTH MIND Platform',
         rpID,
         userID: userId,
-        userName: user.full_name,
-        userDisplayName: user.full_name,
+        userName: fullName,
+        userDisplayName: fullName,
         attestationType: 'none',
         excludeCredentials,
         authenticatorSelection: {
