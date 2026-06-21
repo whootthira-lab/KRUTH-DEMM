@@ -87,11 +87,37 @@ export async function POST(request: Request) {
       }
 
       // Verify with Supabase Auth
-      const { data, error } = await supabase.auth.verifyOtp({
+      // Try 'email' first, then fallback to 'signup' and 'magiclink' depending on flow
+      let verifyResult = await supabase.auth.verifyOtp({
         email: storedEmail,
         token: enteredOtp.trim(),
         type: 'email',
       });
+
+      if (verifyResult.error) {
+        console.log(`[Supabase OTP] 'email' verification failed, trying 'signup'...`);
+        const signupResult = await supabase.auth.verifyOtp({
+          email: storedEmail,
+          token: enteredOtp.trim(),
+          type: 'signup',
+        });
+        
+        if (!signupResult.error) {
+          verifyResult = signupResult;
+        } else {
+          console.log(`[Supabase OTP] 'signup' verification failed, trying 'magiclink'...`);
+          const magicLinkResult = await supabase.auth.verifyOtp({
+            email: storedEmail,
+            token: enteredOtp.trim(),
+            type: 'magiclink',
+          });
+          if (!magicLinkResult.error) {
+            verifyResult = magicLinkResult;
+          }
+        }
+      }
+
+      const { data, error } = verifyResult;
 
       if (error || !data.session) {
         attempts += 1;
