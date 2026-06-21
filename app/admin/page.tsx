@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -93,57 +94,44 @@ export default function AdminLogin() {
     setSuccess('');
 
     const trimmedEmail = email.trim().toLowerCase();
-    if (!trimmedEmail) {
-      setError('กรุณากรอกอีเมล');
+    if (!trimmedEmail || !password) {
+      setError('กรุณากรอกอีเมลและรหัสผ่าน');
       return;
     }
 
     setLoading(true);
 
     try {
-      // 1. Query the org_admins table in Supabase
-      const { data: adminData, error: dbErr } = await supabase
-        .from('org_admins')
-        .select('*, organizations(name)')
-        .eq('email', trimmedEmail)
-        .maybeSingle();
+      const res = await fetch('/api/auth/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail, password })
+      });
 
-      if (dbErr) {
-        console.error('Database query error:', dbErr);
-        setError('เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล');
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'การตรวจสอบสิทธิ์ล้มเหลว');
         setLoading(false);
         return;
       }
 
-      // 2. Check if adminData exists
-      if (!adminData) {
-        setError('ขออภัย อีเมลนี้ไม่มีสิทธิ์เข้าใช้ระบบผู้บริหารองค์กร');
-        setLoading(false);
-        return;
-      }
-
-      // 3. Determine if it is a Super Admin, Org Admin, or Coach
-      const isSuper = adminData.role === 'super_admin' || trimmedEmail === 'whootthira@gmail.com';
-      const role = isSuper ? 'super_admin' : (adminData.role === 'coach' ? 'coach' : 'org_admin');
-      const orgName = isSuper ? 'ส่วนกลาง (Super Admin)' : (adminData.organizations as any)?.name || 'ผู้ดูแลหน่วยงาน';
-
-      // 4. Save admin credentials to localStorage
-      localStorage.setItem('kruth_admin_email', trimmedEmail);
-      localStorage.setItem('kruth_admin_role', role);
-      localStorage.setItem('kruth_admin_org_name', orgName);
-      localStorage.setItem('kruth_admin_full_name', adminData.full_name || '');
+      // Save admin credentials to localStorage
+      localStorage.setItem('kruth_admin_email', data.email);
+      localStorage.setItem('kruth_admin_role', data.role);
+      localStorage.setItem('kruth_admin_org_name', data.orgName);
+      localStorage.setItem('kruth_admin_full_name', data.fullName);
       
-      if (!isSuper) {
-        localStorage.setItem('kruth_admin_org_id', adminData.org_id);
+      if (data.orgId) {
+        localStorage.setItem('kruth_admin_org_id', data.orgId);
       } else {
-        localStorage.removeItem('kruth_admin_org_id'); // Super admin has global scope
+        localStorage.removeItem('kruth_admin_org_id');
       }
 
-      setSuccess(`เข้าสู่ระบบสำเร็จ! ยินดีต้อนรับ ${orgName}`);
+      setSuccess(data.message || `เข้าสู่ระบบสำเร็จ! ยินดีต้อนรับ ${data.orgName}`);
       
-      // 5. Redirect based on role
       setTimeout(() => {
-        if (isSuper) {
+        if (data.role === 'super_admin') {
           router.push('/admin/super-dashboard');
         } else {
           router.push('/admin/dashboard');
@@ -152,7 +140,7 @@ export default function AdminLogin() {
 
     } catch (err: any) {
       console.error('Login error:', err);
-      setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+      setError('เกิดข้อผิดพลาดในการเชื่อมต่อระบบหลังบ้าน');
     } finally {
       setLoading(false);
     }
@@ -200,6 +188,18 @@ export default function AdminLogin() {
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
               placeholder="example@gmail.com"
+              className="w-full px-4 py-2.5 border border-gray-200 focus:border-[#1D8B75] rounded-xl text-sm focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-black text-[#1A3A5C] uppercase tracking-wider mb-1.5">รหัสผ่าน</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              placeholder="••••••"
               className="w-full px-4 py-2.5 border border-gray-200 focus:border-[#1D8B75] rounded-xl text-sm focus:outline-none transition-colors"
             />
           </div>
