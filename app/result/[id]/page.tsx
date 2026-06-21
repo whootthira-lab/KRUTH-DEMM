@@ -1083,6 +1083,43 @@ function ResultPageInner() {
         {shareSuccess && <p className="text-xs font-bold text-green-600 text-center mt-3 bg-green-50 p-2 rounded-lg">{shareSuccess}</p>}
       </div>
 
+      {/* 🟢 LINE CHATBOT INTEGRATION CARD */}
+      <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 space-y-3 shadow-sm text-left">
+        <div className="flex items-start gap-3">
+          <div className="bg-emerald-100 p-2.5 rounded-xl text-xl">🧘‍♀️</div>
+          <div>
+            <h3 className="font-bold text-[#1A3A5C] text-sm">คุยต่อกับ โค้ช ซาติยะ บน LINE</h3>
+            <p className="text-xs text-gray-600 leading-relaxed mt-0.5">
+              คุณสามารถปรึกษาสุขภาพใจ แชตระบายอารมณ์ และวางแผนพัฒนาจิตวิญญาณส่วนตัวต่อบน LINE OA ได้แล้ววันนี้ ระบบจะเชื่อมโยงคะแนนและตรรกะประเมินเพื่อใช้ในการจัดกลุ่มและพัฒนาหน่วยงานของคุณ
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <a
+            href={`https://line.me/R/oaMessage/@109iyfhr/?text=สวัสดีค่ะโค้ชซาติยะ%20เชื่อมต่อผลประเมินรหัส%20${id}%20ของฉัน`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center justify-center gap-2 py-3 bg-[#06C755] hover:bg-[#05b04b] active:bg-[#049a41] text-white text-center font-bold text-xs md:text-sm rounded-xl transition-all shadow-md transform hover:scale-[1.01]"
+          >
+            <span className="text-base">💬</span> เชื่อมต่อแชตโค้ช บน LINE
+          </a>
+          
+          <div className="flex items-center justify-between bg-white border border-emerald-100/50 rounded-xl px-3 py-2 text-xs">
+            <span className="text-gray-500 font-mono select-all">รหัสเชื่อมโยง: {id}</span>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(String(id));
+                alert('📋 คัดลอกรหัสเชื่อมต่อแล้ว นำไปส่งในแชต LINE โค้ชซาติยะได้ทันที!');
+              }}
+              className="text-emerald-700 hover:text-emerald-800 font-bold hover:underline"
+            >
+              คัดลอกรหัส
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* ═══ ID + DISCLAIMER ═══ */}
       <div className="bg-gray-100 rounded-lg p-2 text-center font-mono text-xs text-gray-500 border border-gray-200">DVJ ID: {id}</div>
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2.5 text-center text-yellow-800" style={{ fontSize: '0.65rem' }}>
