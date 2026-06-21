@@ -84,13 +84,13 @@ export async function POST(req: NextRequest) {
       }
 
       // 2. Check for assessment linking command
-      // Format 1: "สวัสดีค่ะโค้ชซาติยะ เชื่อมต่อผลประเมินรหัส UUID ของฉัน"
-      // Format 2: "เชื่อมต่อผลประเมินรหัส UUID"
-      // Format 3: Raw UUID
-      const uuidMatch = messageText.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      // Format 1: "สวัสดีค่ะโค้ชซาติยะ เชื่อมต่อผลประเมินรหัส UUID/DEM-ID ของฉัน"
+      // Format 2: "เชื่อมต่อผลประเมินรหัส UUID/DEM-ID"
+      // Format 3: Raw UUID/DEM-ID
+      const idMatch = messageText.match(/(DEM-[A-Za-z0-9_\-]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
 
-      if (uuidMatch) {
-        const targetUserId = uuidMatch[0];
+      if (idMatch) {
+        const targetUserId = idMatch[0];
         console.log(`[LINE Webhook] Attempting link request for user_id: ${targetUserId} with LINE ID: ${lineUserId}`);
 
         // Query if this user exists in the db

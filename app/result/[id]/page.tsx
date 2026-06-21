@@ -1097,7 +1097,7 @@ function ResultPageInner() {
 
         <div className="flex flex-col gap-2">
           <a
-            href={`https://line.me/R/oaMessage/@109iyfhr/?text=สวัสดีค่ะโค้ชซาติยะ%20เชื่อมต่อผลประเมินรหัส%20${id}%20ของฉัน`}
+            href={`https://line.me/R/oaMessage/@109iyfhr/?สวัสดีค่ะโค้ชซาติยะ%20เชื่อมต่อผลประเมินรหัส%20${id}%20ของฉัน`}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full flex items-center justify-center gap-2 py-3 bg-[#06C755] hover:bg-[#05b04b] active:bg-[#049a41] text-white text-center font-bold text-xs md:text-sm rounded-xl transition-all shadow-md transform hover:scale-[1.01]"
