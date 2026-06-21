@@ -40,6 +40,7 @@ function ResultPageInner() {
   const [feedbackSuccess, setFeedbackSuccess] = useState<any>(null);
 
   // 🧘‍♀️ Satiya AI Wellbeing Coach state
+  const [showLinkSuccessModal, setShowLinkSuccessModal] = useState(false);
   const [showSatiyaChat, setShowSatiyaChat] = useState(false);
   const [satiyaMessages, setSatiyaMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [satiyaInput, setSatiyaInput] = useState('');
@@ -253,7 +254,21 @@ function ResultPageInner() {
     }
   };
 
-  useEffect(() => { trackPageView(`/result/${id}`); loadResult(); }, [id]);
+  useEffect(() => {
+    trackPageView(`/result/${id}`);
+    loadResult();
+  }, [id]);
+
+  useEffect(() => {
+    if (sp.get('linked') === 'true') {
+      setShowLinkSuccessModal(true);
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('linked');
+        window.history.replaceState({}, '', url.pathname + url.search);
+      } catch (e) {}
+    }
+  }, [sp]);
 
   async function loadResult() {
     const { data } = await supabase.from('results').select('*').eq('user_id', id).order('created_at', { ascending: false }).limit(1).single();
@@ -1088,7 +1103,7 @@ function ResultPageInner() {
         <div className="flex items-start gap-3">
           <div className="bg-emerald-100 p-2.5 rounded-xl text-xl">🧘‍♀️</div>
           <div>
-            <h3 className="font-bold text-[#1A3A5C] text-sm">คุยต่อกับ โค้ช ซาติยะ บน LINE</h3>
+            <h3 className="font-bold text-[#1A3A5C] text-sm">คุยต่อกับ โค้ช สะติยะ บน LINE</h3>
             <p className="text-xs text-gray-600 leading-relaxed mt-0.5">
               คุณสามารถปรึกษาสุขภาพใจ แชตระบายอารมณ์ และวางแผนพัฒนาจิตวิญญาณส่วนตัวต่อบน LINE OA ได้แล้ววันนี้ ระบบจะเชื่อมโยงคะแนนและตรรกะประเมินเพื่อใช้ในการจัดกลุ่มและพัฒนาหน่วยงานของคุณ
             </p>
@@ -1096,26 +1111,37 @@ function ResultPageInner() {
         </div>
 
         <div className="flex flex-col gap-2">
-          <a
-            href={`https://line.me/R/oaMessage/@109iyfhr/?สวัสดีค่ะโค้ชซาติยะ%20เชื่อมต่อผลประเมินรหัส%20${id}%20ของฉัน`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full flex items-center justify-center gap-2 py-3 bg-[#06C755] hover:bg-[#05b04b] active:bg-[#049a41] text-white text-center font-bold text-xs md:text-sm rounded-xl transition-all shadow-md transform hover:scale-[1.01]"
-          >
-            <span className="text-base">💬</span> เชื่อมต่อแชตโค้ช บน LINE
-          </a>
+          {result?.user?.line_user_id ? (
+            <a
+              href="https://lin.ee/W3daU8o"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[#06C755] hover:bg-[#05b04b] active:bg-[#049a41] text-white text-center font-bold text-xs md:text-sm rounded-xl transition-all shadow-md transform hover:scale-[1.01]"
+            >
+              <span className="text-base">💬</span> เปิดแชตโค้ช สะติยะ บน LINE
+            </a>
+          ) : (
+            <a
+              href={`/api/line/login/authorize?userId=${id}`}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[#06C755] hover:bg-[#05b04b] active:bg-[#049a41] text-white text-center font-bold text-xs md:text-sm rounded-xl transition-all shadow-md transform hover:scale-[1.01]"
+            >
+              <span className="text-base">💬</span> เชื่อมต่อแชตโค้ช สะติยะ บน LINE
+            </a>
+          )}
           
           <div className="flex items-center justify-between bg-white border border-emerald-100/50 rounded-xl px-3 py-2 text-xs">
-            <span className="text-gray-500 font-mono select-all">รหัสเชื่อมโยง: {id}</span>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(String(id));
-                alert('📋 คัดลอกรหัสเชื่อมต่อแล้ว นำไปส่งในแชต LINE โค้ชซาติยะได้ทันที!');
-              }}
-              className="text-emerald-700 hover:text-emerald-800 font-bold hover:underline"
-            >
-              คัดลอกรหัส
-            </button>
+            <span className="text-gray-500 font-mono select-all">สถานะ: {result?.user?.line_user_id ? 'เชื่อมต่อแล้ว 🟢' : 'ยังไม่ได้เชื่อมต่อ 🔴'}</span>
+            {!result?.user?.line_user_id && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(String(id));
+                  alert('📋 คัดลอกรหัสเชื่อมต่อแล้ว นำไปส่งในแชต LINE โค้ชสะติยะได้ทันที!');
+                }}
+                className="text-emerald-700 hover:text-emerald-800 font-bold hover:underline"
+              >
+                คัดลอกรหัสสำรอง
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1189,6 +1215,37 @@ function ResultPageInner() {
       )}
 
       {/* ═══ CHATBOT PEER FEEDBACK MODAL ═══ */}
+      {/* 🟢 LINE Login Connection Success Modal */}
+      {showLinkSuccessModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white/95 border border-emerald-100 shadow-2xl rounded-2xl w-full max-w-sm p-6 text-center overflow-hidden animate-scale-up" onClick={(e) => e.stopPropagation()}>
+            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
+              🧘‍♀️
+            </div>
+            <h3 className="font-bold text-[#1A3A5C] text-lg mb-2">เชื่อมต่อกับ โค้ชสะติยะ สำเร็จ!</h3>
+            <p className="text-xs text-gray-600 leading-relaxed mb-6">
+              ระบบได้ทำการเชื่อมโยงข้อมูลผลประเมินของคุณเข้ากับแชตบอต LINE เรียบร้อยแล้วค่ะ โค้ชสะติยะกำลังส่งข้อความทักทายคุณทางแชต LINE ณ ตอนนี้ สามารถเปิดห้องแชตเพื่อดูรายละเอียดและรับคำปรึกษาได้ทันทีเลยนะคะ 🤍
+            </p>
+            <div className="space-y-2">
+              <a
+                href="https://lin.ee/W3daU8o"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-3 bg-[#06C755] hover:bg-[#05b04b] active:bg-[#049a41] text-white text-center font-bold text-xs md:text-sm rounded-xl transition-all shadow-md transform hover:scale-[1.01]"
+              >
+                💬 เปิดห้องแชตบน LINE
+              </a>
+              <button
+                onClick={() => setShowLinkSuccessModal(false)}
+                className="w-full py-2.5 text-gray-500 hover:text-gray-700 text-xs font-semibold hover:underline"
+              >
+                ปิดหน้าต่างนี้
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showChatModal && chatPeer && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm" onClick={() => setShowChatModal(false)}>
           <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -1293,7 +1350,7 @@ function ResultPageInner() {
               <div className="flex items-center gap-2">
                 <span className="text-xl">🧘‍♀️</span>
                 <div>
-                  <h3 className="font-bold text-sm">โค้ช ซาติยะ</h3>
+                  <h3 className="font-bold text-sm">โค้ช สะติยะ</h3>
                   <p className="text-[0.65rem] text-teal-100">ผู้แนะนำและดูแลสุขภาวะทางใจส่วนตัวของคุณ</p>
                 </div>
               </div>
@@ -1344,7 +1401,7 @@ function ResultPageInner() {
                   }`}>
                     {msg.role !== 'user' && (
                       <div className="flex justify-between items-center mb-1 gap-4">
-                        <span className="font-bold text-[0.65rem] text-[#1D8B75]">โค้ช ซาติยะ</span>
+                        <span className="font-bold text-[0.65rem] text-[#1D8B75]">โค้ช สะติยะ</span>
                         <button
                           type="button"
                           onClick={() => handleSpeak(msg.content, index)}
@@ -1426,7 +1483,7 @@ function ResultPageInner() {
           onClick={openSatiyaChat}
           className="flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-[#1D8B75] to-[#1A3A5C] text-white shadow-xl hover:scale-105 transition-transform font-bold text-xs md:text-sm"
         >
-          <span className="text-base">🧘‍♀️</span> คุยกับโค้ช ซาติยะ
+          <span className="text-base">🧘‍♀️</span> คุยกับโค้ช สะติยะ
         </button>
       </div>
     </div>

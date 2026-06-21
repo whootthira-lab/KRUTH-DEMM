@@ -637,7 +637,7 @@ ${recommendedTheories}
     replyText = await callGenerativeAI(systemPrompt, chatHistory, userMessage);
   } catch (apiErr: any) {
     console.error("LLM Router failed (Wellbeing), using rule-based fallback:", apiErr);
-    replyText = `สวัสดีค่ะคุณ ${profile.name} โค้ชซาติยะยินดีต้อนรับค่ะ (ขณะนี้บริการ AI เชื่อมต่อขัดข้องชั่วคราว โค้ชขอแจ้งคำแนะนำที่คัดเลือกมาเฉพาะสำหรับสุขภาวะใจของคุณทดแทนนะคะ)
+    replyText = `สวัสดีค่ะคุณ ${profile.name} โค้ชสะติยะยินดีต้อนรับค่ะ (ขณะนี้บริการ AI เชื่อมต่อขัดข้องชั่วคราว โค้ชขอแจ้งคำแนะนำที่คัดเลือกมาเฉพาะสำหรับสุขภาวะใจของคุณทดแทนนะคะ)
 
 📊 **จากการวิเคราะห์คะแนนสุขภาวะ KWI ของคุณ:**
 * 🌟 **มิติที่โดดเด่นโดนใจสูงสุดของคุณคือ ${highestDim.name}** (คะแนน ${highestDim.score}/5)
