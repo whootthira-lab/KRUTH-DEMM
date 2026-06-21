@@ -2107,9 +2107,15 @@ export default function ExecutiveDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-3">
+                    {/* 📧 Instruction banner */}
+                    <div className="bg-indigo-950/60 border border-indigo-800/50 rounded-xl p-3 text-[11px] text-indigo-200 leading-relaxed">
+                      <p className="font-bold text-indigo-300 mb-1">📧 รหัส OTP ถูกส่งไปยังอีเมลแล้ว</p>
+                      <p>กรุณาเปิดอีเมลและ <strong>กรอกรหัส 6 หลัก</strong> ในช่องด้านล่าง</p>
+                      <p className="text-indigo-400 mt-1 text-[10px]">⚠️ อย่ากดลิงก์ในอีเมล — ให้ใช้รหัสตัวเลข 6 หลักเท่านั้น</p>
+                    </div>
                     <div className="text-left space-y-1">
                       <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">กรอกรหัสยืนยัน 6 หลัก</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">กรอกรหัสยืนยัน 6 หลักจากอีเมล</label>
                         {/* Dev OTP code display removed — real email OTP is now used */}
                       </div>
                       <input
@@ -2136,7 +2142,7 @@ export default function ExecutiveDashboard() {
                       >
                         ขอรหัส OTP อีกครั้ง
                       </button>
-                      <span>เหลือโอกาสกรอกอีก {3 - otpAttempts} ครั้ง</span>
+                      <span>เหลือโอกาสกรอกอีก {5 - otpAttempts} ครั้ง</span>
                     </div>
                   </div>
                 )}

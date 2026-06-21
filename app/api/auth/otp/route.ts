@@ -25,7 +25,9 @@ export async function POST(request: Request) {
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          shouldCreateUser: true, // สร้าง auth user ถ้ายังไม่มี
+          shouldCreateUser: true,
+          // Fix: redirect Magic Link to production URL, not localhost
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://kruthdemm.vercel.app'}/admin`,
         },
       });
 
