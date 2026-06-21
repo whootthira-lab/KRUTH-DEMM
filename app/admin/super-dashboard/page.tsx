@@ -626,6 +626,50 @@ export default function SuperDashboard() {
     }
   }
 
+  // Action: Remove Admin Rights
+  async function handleRemoveAdmin(adminId: string, email: string) {
+    const ok = window.confirm(`คุณต้องการลบสิทธิ์ผู้ดูแลของ "${email}" ใช่หรือไม่?\n(ข้อมูลอุปกรณ์สิทธิ์และ Passkey ทั้งหมดของแอดมินท่านนี้จะถูกล้างออกจากตารางในฐานข้อมูล)`);
+    if (!ok) return;
+
+    setActionLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      // 1. Delete associated Passkeys from user_passkey_credentials
+      const { data: uData } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+
+      const userIdsToDelete = [adminId, email];
+      if (uData) {
+        userIdsToDelete.push(uData.id);
+      }
+
+      await supabase
+        .from('user_passkey_credentials')
+        .delete()
+        .in('user_id', userIdsToDelete);
+
+      // 2. Delete Org Admin record mapping
+      const { error: orgAdminError } = await supabase
+        .from('org_admins')
+        .delete()
+        .eq('id', adminId);
+
+      if (orgAdminError) throw orgAdminError;
+
+      setMessage({ type: 'success', text: `ลบสิทธิ์ผู้ดูแลและล้างอุปกรณ์ Passkey ของ "${email}" เรียบร้อยแล้ว` });
+      loadOrganizations();
+    } catch (err: any) {
+      console.error(err);
+      setMessage({ type: 'error', text: err.message || 'เกิดข้อผิดพลาดในการลบสิทธิ์' });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   function handleImpersonate(orgId: string, orgName: string) {
     localStorage.setItem('kruth_admin_org_id', orgId);
     localStorage.setItem('kruth_admin_org_name', orgName);
@@ -1245,6 +1289,14 @@ export default function SuperDashboard() {
                                     เชิญ
                                   </button>
                                 )}
+                                <button
+                                  onClick={() => handleRemoveAdmin(adm.id, adm.email)}
+                                  disabled={actionLoading}
+                                  className="px-1.5 py-0.5 bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-200 border border-slate-700/50 rounded text-[8px] font-bold transition-all"
+                                  title="ลบสิทธิ์ผู้ดูแลระบบท่านนี้ออกจากองค์กร"
+                                >
+                                  ลบ
+                                </button>
                               </div>
                             </div>
                           ))}
