@@ -533,12 +533,57 @@ export default function SuperDashboard() {
 
       if (error) throw error;
 
-      setMessage({ type: 'success', text: `มอบสิทธิ์ผู้ดูแล "${nameToAssign || emailToAssign}" สำเร็จ!` });
+      // Automatically send OTP/Magic Link invitation email
+      let emailStatusText = '';
+      try {
+        const res = await fetch('/api/auth/otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'send', email: emailToAssign })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          emailStatusText = ' และระบบได้ส่งอีเมลคำเชิญเรียบร้อยแล้ว!';
+        } else {
+          emailStatusText = ` (⚠️ แต่ระบบไม่สามารถส่งอีเมลได้: ${data.error || 'โปรดรอสักครู่และกดส่งคำเชิญใหม่ภายหลัง'})`;
+        }
+      } catch (emailErr) {
+        console.error('Failed to auto-send invitation email:', emailErr);
+        emailStatusText = ' (⚠️ แต่ไม่สามารถส่งอีเมลได้เนื่องจากข้อผิดพลาดเครือข่าย)';
+      }
+
+      setMessage({ type: 'success', text: `มอบสิทธิ์ผู้ดูแล "${nameToAssign || emailToAssign}" สำเร็จ!${emailStatusText}` });
       setAssignEmail(prev => ({ ...prev, [orgId]: '' }));
       setAssignName(prev => ({ ...prev, [orgId]: '' }));
       loadOrganizations();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'เกิดข้อผิดพลาดในการบันทึกสิทธิ์' });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // Action: Send / Re-send Invitation Link
+  async function handleSendInvite(email: string) {
+    setActionLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const res = await fetch('/api/auth/otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', email: email.toLowerCase() })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'ไม่สามารถส่งรหัส OTP ได้');
+      }
+
+      setMessage({ type: 'success', text: `ส่งอีเมลคำเชิญการผูกอุปกรณ์ไปยัง "${email}" เรียบร้อยแล้ว!` });
+    } catch (err: any) {
+      console.error(err);
+      setMessage({ type: 'error', text: err.message || 'เกิดข้อผิดพลาดในการส่งคำเชิญ' });
     } finally {
       setActionLoading(false);
     }
@@ -1181,7 +1226,7 @@ export default function SuperDashboard() {
                                 }`}>
                                   {adm.hasPasskey ? '🔑 ผูกแล้ว' : '❌ ยังไม่ผูก'}
                                 </span>
-                                {adm.hasPasskey && (
+                                {adm.hasPasskey ? (
                                   <button
                                     onClick={() => handleResetPasskey(adm.id, adm.email)}
                                     disabled={actionLoading}
@@ -1189,6 +1234,15 @@ export default function SuperDashboard() {
                                     title="ล้างข้อมูล Passkey เพื่อให้ลงทะเบียนอุปกรณ์ชิ้นใหม่ได้"
                                   >
                                     ล้าง
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleSendInvite(adm.email)}
+                                    disabled={actionLoading}
+                                    className="px-1.5 py-0.5 bg-teal-600 hover:bg-teal-500 text-white rounded text-[8px] font-bold transition-all"
+                                    title="ส่งอีเมลคำเชิญเพื่อเปิดสิทธิ์และตั้งค่า Passkey ใหม่"
+                                  >
+                                    เชิญ
                                   </button>
                                 )}
                               </div>
