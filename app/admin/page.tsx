@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
@@ -9,6 +9,83 @@ export default function AdminLogin() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const router = useRouter();
+
+  // Check for invite token on load to support passwordless auto-login for passkey setup
+  useEffect(() => {
+    const checkInviteToken = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const inviteToken = params.get('invite');
+      if (!inviteToken) return;
+
+      setLoading(true);
+      setError('');
+
+      try {
+        // Query the org_admins table in Supabase by invite UUID
+        const { data: adminData, error: dbErr } = await supabase
+          .from('org_admins')
+          .select('*, organizations(name)')
+          .eq('id', inviteToken)
+          .maybeSingle();
+
+        if (dbErr || !adminData) {
+          setError('ลิงก์คำเชิญไม่ถูกต้องหรือหมดอายุแล้ว');
+          setLoading(false);
+          return;
+        }
+
+        const trimmedEmail = adminData.email.trim().toLowerCase();
+        const isSuper = adminData.role === 'super_admin' || trimmedEmail === 'whootthira@gmail.com';
+        const role = isSuper ? 'super_admin' : (adminData.role === 'coach' ? 'coach' : 'org_admin');
+        const orgName = isSuper ? 'ส่วนกลาง (Super Admin)' : (adminData.organizations as any)?.name || 'ผู้ดูแลหน่วยงาน';
+
+        // Check if they already have a passkey registered
+        const { data: creds } = await supabase
+          .from('user_passkey_credentials')
+          .select('id')
+          .or(`user_id.eq.${adminData.id},user_id.eq.${trimmedEmail}`)
+          .maybeSingle();
+
+        // Save credentials
+        localStorage.setItem('kruth_admin_email', trimmedEmail);
+        localStorage.setItem('kruth_admin_role', role);
+        localStorage.setItem('kruth_admin_org_name', orgName);
+        localStorage.setItem('kruth_admin_full_name', adminData.full_name || '');
+        
+        if (!isSuper) {
+          localStorage.setItem('kruth_admin_org_id', adminData.org_id);
+        } else {
+          localStorage.removeItem('kruth_admin_org_id');
+        }
+
+        // Set a flag to automatically trigger Passkey registration on dashboard load
+        if (!creds) {
+          localStorage.setItem('kruth_trigger_passkey_register', 'true');
+        } else {
+          // If they already have a passkey, just log in normally
+          localStorage.removeItem('kruth_trigger_passkey_register');
+        }
+
+        setSuccess(`ยืนยันตัวตนสำเร็จ! กำลังเข้าสู่ระบบ ${orgName}`);
+        
+        setTimeout(() => {
+          if (isSuper) {
+            router.push('/admin/super-dashboard');
+          } else {
+            router.push('/admin/dashboard');
+          }
+        }, 1500);
+
+      } catch (err) {
+        console.error('Invite token error:', err);
+        setError('เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์คำเชิญ');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkInviteToken();
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

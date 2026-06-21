@@ -519,6 +519,16 @@ export default function ExecutiveDashboard() {
     }
   };
 
+  // Automatically trigger Passkey registration popup on load if invited via direct link
+  useEffect(() => {
+    if (isVerified && !isLocked && localStorage.getItem('kruth_trigger_passkey_register') === 'true') {
+      setTimeout(() => {
+        handleRegisterPasskey();
+        localStorage.removeItem('kruth_trigger_passkey_register');
+      }, 1000);
+    }
+  }, [isVerified, isLocked]);
+
   useEffect(() => {
     // Access Control check
     const email = localStorage.getItem('kruth_admin_email');
@@ -542,8 +552,15 @@ export default function ExecutiveDashboard() {
       setIsLocked(false);
       setIsVerified(true);
     } else {
-      setIsLocked(true);
-      setIsVerified(false);
+      // Check if this is an invite-link session requiring setup to bypass the initial lock screen
+      const isInviteAuth = localStorage.getItem('kruth_trigger_passkey_register') === 'true';
+      if (isInviteAuth) {
+        setIsLocked(false);
+        setIsVerified(true);
+      } else {
+        setIsLocked(true);
+        setIsVerified(false);
+      }
     }
 
     if (storedOrgName) {

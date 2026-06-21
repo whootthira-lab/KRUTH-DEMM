@@ -1316,6 +1316,36 @@ export default function SuperDashboard() {
                     </td>
                     <td className="py-4">
                       <div className="flex flex-col gap-1.5 max-w-[240px] mx-auto">
+                        {/* Display invite links for admins of this org who are not bound yet */}
+                        {org.admins.filter((adm: any) => !adm.hasPasskey).map((adm: any) => {
+                          const inviteUrl = typeof window !== 'undefined' 
+                            ? `${window.location.origin}/admin?invite=${adm.id}` 
+                            : `/admin?invite=${adm.id}`;
+                          return (
+                            <div key={adm.id} className="mb-1 p-1 bg-slate-900/90 border border-slate-800 rounded-lg text-left space-y-1">
+                              <p className="text-[7.5px] text-teal-400 font-black truncate" title={adm.email}>
+                                🔗 ลิงก์เชิญ ({adm.email}):
+                              </p>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  readOnly
+                                  value={inviteUrl}
+                                  className="flex-1 px-1.5 py-0.5 bg-slate-950 text-slate-350 text-[7px] font-mono rounded border border-slate-850 outline-none select-all"
+                                />
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(inviteUrl);
+                                    alert('คัดลอกลิงก์คำเชิญตั้งค่าเรียบร้อยแล้ว!');
+                                  }}
+                                  className="px-1.5 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-[7px] font-bold whitespace-nowrap active:scale-95 transition-all"
+                                >
+                                  copy
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                         <input
                           type="text"
                           placeholder="ชื่อ-นามสกุล (สำหรับลายน้ำ)"
