@@ -12,6 +12,7 @@ export interface Question {
   alert_flag: string;
   branch_trigger: string;
   branch_group: string;
+  sign_language_video_url?: string;
 }
 
 export interface Answer {

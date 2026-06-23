@@ -60,6 +60,140 @@ function ResultPageInner() {
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState<'google' | 'shimmer' | 'nova'>('google');
 
+  // ═══ ACCESSIBILITY STATE ═══
+  const [accessibleMode, setAccessibleMode] = useState({
+    visuallyImpaired: false,
+    hearingImpaired: false,
+    speechImpaired: false,
+    highContrast: false,
+    largeFont: false,
+    voiceInteractive: false,
+    signLanguageVideo: false,
+  });
+
+  // Load accessibility settings from localStorage on client-side mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.localStorage.getItem('kruth_accessible_mode');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setAccessibleMode(parsed);
+        } catch (e) {
+          console.error('Error parsing accessibility settings:', e);
+        }
+      }
+    }
+  }, []);
+
+  // Save accessibility settings to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('kruth_accessible_mode', JSON.stringify(accessibleMode));
+    }
+  }, [accessibleMode]);
+
+  const toggleAccessibility = (key: keyof typeof accessibleMode) => {
+    setAccessibleMode(prev => {
+      const updated = { ...prev, [key]: !prev[key] };
+      if (key === 'visuallyImpaired') {
+        updated.voiceInteractive = !prev.visuallyImpaired;
+        updated.largeFont = !prev.visuallyImpaired;
+        updated.highContrast = !prev.visuallyImpaired;
+      }
+      if (key === 'hearingImpaired') {
+        updated.signLanguageVideo = !prev.hearingImpaired;
+      }
+      return updated;
+    });
+  };
+
+  const renderAccessibilityPanel = () => {
+    return (
+      <div className={`p-4 rounded-2xl shadow-sm border transition-all duration-300 mb-4 ${
+        accessibleMode.highContrast ? 'bg-black border-yellow-400 text-yellow-400 font-sans' : 'bg-gray-50 border-gray-100 text-gray-700'
+      }`}>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">♿</span>
+          <h3 className="font-bold text-sm">สิ่งอำนวยความสะดวกสำหรับผู้พิการ (Accessibility Panel)</h3>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+          <button
+            type="button"
+            onClick={() => toggleAccessibility('visuallyImpaired')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+              accessibleMode.visuallyImpaired
+                ? (accessibleMode.highContrast ? 'bg-yellow-400 text-black border-yellow-400' : 'bg-[#1D8B75] text-white border-[#1D8B75]')
+                : (accessibleMode.highContrast ? 'bg-black text-yellow-400 border-yellow-400' : 'bg-white border-gray-200')
+            }`}
+          >
+            👓 บกพร่องทางการมองเห็น (เสียงช่วยอ่าน/นำทาง)
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleAccessibility('hearingImpaired')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+              accessibleMode.hearingImpaired
+                ? (accessibleMode.highContrast ? 'bg-yellow-400 text-black border-yellow-400' : 'bg-[#1D8B75] text-white border-[#1D8B75]')
+                : (accessibleMode.highContrast ? 'bg-black text-yellow-400 border-yellow-400' : 'bg-white border-gray-200')
+            }`}
+          >
+            🧏 บกพร่องทางการได้ยิน (ภาษามือ/ซับ CC)
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleAccessibility('speechImpaired')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+              accessibleMode.speechImpaired
+                ? (accessibleMode.highContrast ? 'bg-yellow-400 text-black border-yellow-400' : 'bg-[#1D8B75] text-white border-[#1D8B75]')
+                : (accessibleMode.highContrast ? 'bg-black text-yellow-400 border-yellow-400' : 'bg-white border-gray-200')
+            }`}
+          >
+            🙊 บกพร่องทางการพูด (วิเคราะห์การพิมพ์แทนเสียง)
+          </button>
+        </div>
+
+        {(accessibleMode.visuallyImpaired || accessibleMode.hearingImpaired) && (
+          <div className="mt-3 pt-3 border-t border-dashed border-gray-200/50 flex flex-wrap gap-2.5">
+            {accessibleMode.visuallyImpaired && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => toggleAccessibility('largeFont')}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
+                    accessibleMode.largeFont ? 'bg-yellow-200 text-gray-800' : 'bg-white text-gray-500'
+                  }`}
+                >
+                  🔎 ตัวอักษรใหญ่พิเศษ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleAccessibility('highContrast')}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
+                    accessibleMode.highContrast ? 'bg-yellow-200 text-gray-800' : 'bg-white text-gray-500'
+                  }`}
+                >
+                  🌓 โหมดสีคมชัดสูง (7:1)
+                </button>
+              </>
+            )}
+            {accessibleMode.hearingImpaired && (
+              <button
+                type="button"
+                onClick={() => toggleAccessibility('signLanguageVideo')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
+                  accessibleMode.signLanguageVideo ? 'bg-yellow-200 text-gray-800' : 'bg-white text-gray-500'
+                }`}
+              >
+                🤟 วิดีโอภาษามือประกอบคำถาม
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const handleSpeak = async (text: string, index: number) => {
     if (ttsPlayingId === index) {
       if (currentAudio) {
@@ -1344,14 +1478,22 @@ function ResultPageInner() {
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
         {/* Chat window panel */}
         {showSatiyaChat && (
-          <div className="bg-white/95 border border-gray-100 shadow-2xl rounded-2xl w-[90vw] max-w-md h-[500px] flex flex-col mb-4 overflow-hidden animate-fade-in text-left">
+          <div className={`shadow-2xl rounded-2xl w-[90vw] max-w-md h-[500px] flex flex-col mb-4 overflow-hidden animate-fade-in text-left border ${
+            accessibleMode.highContrast
+              ? 'bg-black border-yellow-400 text-yellow-400'
+              : 'bg-white/95 border-gray-100'
+          }`}>
             {/* Header with gradient theme */}
-            <div className="bg-gradient-to-r from-[#1D8B75] to-[#1A3A5C] text-white p-4 flex justify-between items-center">
+            <div className={`p-4 flex justify-between items-center border-b ${
+              accessibleMode.highContrast
+                ? 'bg-black border-yellow-400 text-yellow-400'
+                : 'bg-gradient-to-r from-[#1D8B75] to-[#1A3A5C] text-white border-transparent'
+            }`}>
               <div className="flex items-center gap-2">
                 <span className="text-xl">🧘‍♀️</span>
                 <div>
-                  <h3 className="font-bold text-sm">โค้ช สะติยะ</h3>
-                  <p className="text-[0.65rem] text-teal-100">ผู้แนะนำและดูแลสุขภาวะทางใจส่วนตัวของคุณ</p>
+                  <h3 className={`font-bold ${accessibleMode.largeFont ? 'text-base' : 'text-sm'}`}>โค้ช สะติยะ</h3>
+                  <p className={`text-[0.65rem] ${accessibleMode.highContrast ? 'text-yellow-400/80' : 'text-teal-100'}`}>ผู้แนะนำและดูแลสุขภาวะทางใจส่วนตัวของคุณ</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1359,12 +1501,16 @@ function ResultPageInner() {
                 <select
                   value={selectedVoice}
                   onChange={(e) => setSelectedVoice(e.target.value as any)}
-                  className="bg-white/15 text-white text-[10px] px-1 py-0.5 rounded border border-white/20 focus:outline-none cursor-pointer hover:bg-white/20 transition-colors"
+                  className={`text-[10px] px-1 py-0.5 rounded border focus:outline-none cursor-pointer transition-colors ${
+                    accessibleMode.highContrast
+                      ? 'bg-black text-yellow-400 border-yellow-400'
+                      : 'bg-white/15 text-white border-white/20 hover:bg-white/20'
+                  }`}
                   title="เลือกเสียง AI"
                 >
-                  <option value="google" className="text-gray-800">Google Neural2 (ไทยแท้)</option>
-                  <option value="shimmer" className="text-gray-800">Shimmer (ฝรั่ง - OpenAI)</option>
-                  <option value="nova" className="text-gray-800">Nova (ฝรั่ง - OpenAI)</option>
+                  <option value="google" className={accessibleMode.highContrast ? "bg-black text-yellow-400" : "text-gray-800"}>Google Neural2 (ไทยแท้)</option>
+                  <option value="shimmer" className={accessibleMode.highContrast ? "bg-black text-yellow-400" : "text-gray-800"}>Shimmer (ฝรั่ง - OpenAI)</option>
+                  <option value="nova" className={accessibleMode.highContrast ? "bg-black text-yellow-400" : "text-gray-800"}>Nova (ฝรั่ง - OpenAI)</option>
                 </select>
 
                 {/* Auto Speak Toggle */}
@@ -1380,32 +1526,43 @@ function ResultPageInner() {
                       setTtsPlayingId(null);
                     }
                   }}
-                  className={`p-1 rounded hover:bg-white/20 transition-colors text-xs ${autoSpeak ? 'text-teal-300' : 'text-white/60'}`}
+                  className={`p-1 rounded hover:bg-white/20 transition-colors text-xs ${
+                    accessibleMode.highContrast
+                      ? (autoSpeak ? 'text-yellow-300 font-bold border border-yellow-400' : 'text-yellow-400/60 border-transparent')
+                      : (autoSpeak ? 'text-teal-300' : 'text-white/60')
+                  }`}
                   title={autoSpeak ? "ปิดการอ่านอัตโนมัติ" : "เปิดการอ่านอัตโนมัติ"}
                 >
                   {autoSpeak ? '🔊' : '🔇'}
                 </button>
 
-                <button onClick={closeSatiyaChat} className="text-white/80 hover:text-white text-xl ml-1">✕</button>
+                <button onClick={closeSatiyaChat} className={`text-xl ml-1 ${accessibleMode.highContrast ? 'text-yellow-400 hover:text-white' : 'text-white/80 hover:text-white'}`}>✕</button>
               </div>
             </div>
 
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+            <div
+              className={`flex-1 overflow-y-auto p-4 space-y-4 ${
+                accessibleMode.highContrast ? 'bg-black text-yellow-400' : 'bg-gray-50/50'
+              }`}
+              aria-live="polite"
+            >
               {satiyaMessages.map((msg, index) => (
                 <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-                  <div className={`max-w-[85%] rounded-2xl p-3.5 text-xs md:text-sm leading-relaxed text-left ${
+                  <div className={`max-w-[85%] rounded-2xl p-3.5 leading-relaxed text-left ${
                     msg.role === 'user'
-                      ? 'bg-[#1A3A5C] text-white rounded-tr-none'
-                      : 'bg-white text-gray-700 shadow-sm border border-gray-100 rounded-tl-none'
-                  }`}>
+                      ? (accessibleMode.highContrast ? 'bg-black text-yellow-400 border border-yellow-400 rounded-tr-none' : 'bg-[#1A3A5C] text-white rounded-tr-none')
+                      : (accessibleMode.highContrast ? 'bg-black text-yellow-400 border border-yellow-400 rounded-tl-none' : 'bg-white text-gray-700 shadow-sm border border-gray-100 rounded-tl-none')
+                  } ${accessibleMode.largeFont ? 'text-base font-medium' : 'text-xs md:text-sm'}`}>
                     {msg.role !== 'user' && (
                       <div className="flex justify-between items-center mb-1 gap-4">
-                        <span className="font-bold text-[0.65rem] text-[#1D8B75]">โค้ช สะติยะ</span>
+                        <span className={`font-bold text-[0.65rem] ${accessibleMode.highContrast ? 'text-yellow-400' : 'text-[#1D8B75]'}`}>โค้ช สะติยะ</span>
                         <button
                           type="button"
                           onClick={() => handleSpeak(msg.content, index)}
-                          className="text-[0.65rem] hover:text-[#1A3A5C] transition-colors p-0.5 text-[#1D8B75] font-semibold flex items-center gap-0.5"
+                          className={`text-[0.65rem] font-semibold flex items-center gap-0.5 transition-colors p-0.5 ${
+                            accessibleMode.highContrast ? 'text-yellow-400 hover:text-white' : 'text-[#1D8B75] hover:text-[#1A3A5C]'
+                          }`}
                           title="ฟังเสียงอ่านข้อความนี้"
                         >
                           {ttsPlayingId === index ? (
@@ -1429,7 +1586,9 @@ function ResultPageInner() {
 
               {satiyaLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-white text-gray-400 shadow-sm border rounded-2xl p-3 text-xs flex items-center gap-2">
+                  <div className={`shadow-sm border rounded-2xl p-3 text-xs flex items-center gap-2 ${
+                    accessibleMode.highContrast ? 'bg-black text-yellow-400 border-yellow-400' : 'bg-white text-gray-400 border-gray-100'
+                  }`}>
                     <span className="animate-pulse">● ● ●</span> Satiya กำลังพิมพ์...
                   </div>
                 </div>
@@ -1438,12 +1597,20 @@ function ResultPageInner() {
 
             {/* Quick Reply Option Suggestions */}
             {satiyaOptions.length > 0 && !satiyaLoading && (
-              <div className="px-4 py-2 bg-white border-t flex flex-wrap gap-2 overflow-x-auto">
+              <div className={`px-4 py-2 border-t flex flex-wrap gap-2 overflow-x-auto ${
+                accessibleMode.highContrast ? 'bg-black border-yellow-400' : 'bg-white'
+              }`}>
                 {satiyaOptions.map((opt, i) => (
                   <button
                     key={i}
                     onClick={() => sendSatiyaMessage(opt)}
-                    className="text-xs bg-teal-50 hover:bg-teal-100 border border-teal-100 text-teal-800 px-3 py-1.5 rounded-full font-medium transition-colors whitespace-nowrap"
+                    className={`rounded-full transition-colors whitespace-nowrap ${
+                      accessibleMode.highContrast
+                        ? 'bg-black text-yellow-400 border border-yellow-400 hover:bg-yellow-400 hover:text-black font-bold'
+                        : 'bg-teal-50 hover:bg-teal-100 border border-teal-100 text-teal-800'
+                    } ${
+                      accessibleMode.largeFont ? 'text-sm px-4 py-2.5 font-bold' : 'text-xs px-3 py-1.5 font-medium'
+                    }`}
                   >
                     {opt}
                   </button>
@@ -1457,7 +1624,9 @@ function ResultPageInner() {
                 e.preventDefault();
                 sendSatiyaMessage(satiyaInput);
               }}
-              className="p-3 bg-white border-t flex gap-2"
+              className={`p-3 border-t flex gap-2 ${
+                accessibleMode.highContrast ? 'bg-black border-yellow-400' : 'bg-white'
+              }`}
             >
               <input
                 type="text"
@@ -1465,12 +1634,24 @@ function ResultPageInner() {
                 onChange={(e) => setSatiyaInput(e.target.value)}
                 disabled={satiyaLoading}
                 placeholder={satiyaState.isToxicMode ? "พิมพ์ระบุคำตอบของคุณ..." : "พิมพ์ปรึกษาสุขภาพใจ..."}
-                className="flex-1 px-3.5 py-2 border border-gray-200 rounded-xl text-xs md:text-sm focus:outline-none focus:border-[#1D8B75] disabled:bg-gray-50"
+                className={`flex-1 border rounded-xl focus:outline-none disabled:bg-gray-50 ${
+                  accessibleMode.highContrast
+                    ? 'bg-black text-yellow-400 border-yellow-400 focus:border-yellow-400 placeholder-yellow-400/50'
+                    : 'bg-white border-gray-200 focus:border-[#1D8B75]'
+                } ${
+                  accessibleMode.largeFont ? 'text-base px-4 py-3' : 'text-xs md:text-sm px-3.5 py-2'
+                }`}
               />
               <button
                 type="submit"
                 disabled={satiyaLoading || !satiyaInput.trim()}
-                className="px-4 py-2 bg-[#1A3A5C] hover:bg-[#2E75B6] disabled:bg-gray-200 text-white rounded-xl text-xs font-bold transition-colors"
+                className={`rounded-xl font-bold transition-colors ${
+                  accessibleMode.highContrast
+                    ? 'bg-yellow-400 hover:bg-yellow-500 disabled:bg-yellow-400/20 disabled:text-yellow-400/30 text-black border border-yellow-400'
+                    : 'bg-[#1A3A5C] hover:bg-[#2E75B6] disabled:bg-gray-200 text-white'
+                } ${
+                  accessibleMode.largeFont ? 'text-base px-6 py-3' : 'text-xs px-4 py-2'
+                }`}
               >
                 ส่ง
               </button>
@@ -1481,7 +1662,13 @@ function ResultPageInner() {
         {/* Floating Bubble Button */}
         <button
           onClick={openSatiyaChat}
-          className="flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-[#1D8B75] to-[#1A3A5C] text-white shadow-xl hover:scale-105 transition-transform font-bold text-xs md:text-sm"
+          className={`flex items-center gap-2 rounded-full shadow-xl hover:scale-105 transition-transform font-bold border ${
+            accessibleMode.highContrast
+              ? 'bg-black text-yellow-400 border-yellow-400'
+              : 'bg-gradient-to-r from-[#1D8B75] to-[#1A3A5C] text-white border-transparent'
+          } ${
+            accessibleMode.largeFont ? 'text-base px-7 py-4' : 'text-xs md:text-sm px-5 py-3'
+          }`}
         >
           <span className="text-base">🧘‍♀️</span> คุยกับโค้ช สะติยะ
         </button>
@@ -1490,11 +1677,13 @@ function ResultPageInner() {
   );
 }
 
-function InfoBox({ icon, title, text, bg }: { icon: string; title: string; text: string; bg: string }) {
+function InfoBox({ icon, title, text, bg, highContrast, largeFont }: { icon: string; title: string; text: string; bg: string; highContrast?: boolean; largeFont?: boolean }) {
   return (
-    <div className={`${bg} rounded-xl p-4`}>
-      <h3 className="font-bold text-[#1A3A5C] text-sm mb-1">{icon} {title}</h3>
-      <p className="text-sm text-gray-700 leading-relaxed">{text}</p>
+    <div className={`rounded-xl p-4 border transition-all duration-300 ${
+      highContrast ? 'bg-black border-yellow-400 text-yellow-400' : `${bg} border-transparent text-gray-700`
+    }`}>
+      <h3 className={`font-bold mb-1 ${highContrast ? 'text-yellow-400' : 'text-[#1A3A5C]'} ${largeFont ? 'text-base' : 'text-sm'}`}>{icon} {title}</h3>
+      <p className={`leading-relaxed ${largeFont ? 'text-base font-medium' : 'text-sm'}`}>{text}</p>
     </div>
   );
 }

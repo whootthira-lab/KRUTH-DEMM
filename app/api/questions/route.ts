@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
     alert_flag: row.alert_flag || '',
     branch_trigger: row.branch_trigger || 'ALWAYS',
     branch_group: row.branch_group || '',
+    sign_language_video_url: row.sign_language_video_url || null,
   }));
 
   return NextResponse.json(questions);

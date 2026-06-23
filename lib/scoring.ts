@@ -741,6 +741,78 @@ export function calcVoiceVolatility(
   return parseFloat(Math.max(1.0, Math.min(5.0, rawVvi)).toFixed(2));
 }
 
+// 5.2 Accessibility Typing Stress Proxy (CDI Calculation)
+export interface UserHistoricalBaseline {
+  avg_latency_ms: number;
+  avg_error_rate: number;
+}
+
+export function calcTypingStressProxy(
+  currentAnswers: Answer[],
+  baseline: UserHistoricalBaseline | null
+): { acuteStressDetected: boolean; detailScore: number } {
+  if (!baseline || baseline.avg_latency_ms === 0) return { acuteStressDetected: false, detailScore: 0 };
+
+  const validAnswers = currentAnswers.filter(a => a.latency_ms && a.latency_ms > 0);
+  if (validAnswers.length === 0) return { acuteStressDetected: false, detailScore: 0 };
+
+  const currentAvgLatency = validAnswers.reduce((sum, a) => sum + (a.latency_ms || 0), 0) / validAnswers.length;
+  
+  // Estimate backspace rate from changed answers count in this session
+  const changedAnswers = currentAnswers.filter(a => a.changed);
+  const currentAvgErrorRate = currentAnswers.length > 0 ? changedAnswers.length / currentAnswers.length : 0;
+
+  const w1 = 0.6;
+  const w2 = 0.4;
+
+  const lBar = baseline.avg_latency_ms;
+  const eBar = baseline.avg_error_rate || 0.05;
+
+  const cdi = w1 * (currentAvgLatency / lBar) + w2 * (currentAvgErrorRate / eBar);
+
+  return {
+    acuteStressDetected: cdi > 1.5,
+    detailScore: parseFloat(cdi.toFixed(2))
+  };
+}
+
+export interface BehavioralMetrics {
+  typingSpeedCpm: number;
+  backspaceCount: number;
+  backspaceRatio: number;
+  averageFocusToClickLatencyMs: number;
+}
+
+export interface UserRunningSession {
+  baselineLatencyMs: number;
+  baselineBackspaceRatio: number;
+}
+
+export function estimateStressFromBehavioral(
+  metrics: BehavioralMetrics,
+  baseline: UserRunningSession
+): string {
+  const lBar = baseline.baselineLatencyMs || 2000;
+  const eBar = baseline.baselineBackspaceRatio || 0.05;
+
+  const currentLatency = metrics.averageFocusToClickLatencyMs;
+  const currentBackspaceRatio = metrics.backspaceRatio;
+
+  const w1 = 0.6;
+  const w2 = 0.4;
+
+  const cdi = w1 * (currentLatency / lBar) + w2 * (currentBackspaceRatio / eBar);
+
+  if (cdi > 1.5) {
+    return 'TILT';
+  } else if (cdi < 0.5) {
+    return 'HYPE';
+  } else {
+    return 'CALM';
+  }
+}
+
+
 // 6. Esports RoV Match Engine
 export interface RoVHero {
   id: string;

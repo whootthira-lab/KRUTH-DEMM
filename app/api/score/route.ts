@@ -8,8 +8,8 @@ import type { Answer } from '@/lib/types';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { dvjId, band, answers, sessionId } = body as {
-      dvjId: string; band: string; answers: Answer[]; sessionId: string;
+    const { dvjId, band, answers, sessionId, behavioralMetrics } = body as {
+      dvjId: string; band: string; answers: Answer[]; sessionId: string; behavioralMetrics?: any;
     };
 
     if (!dvjId || !band || !answers?.length) {
@@ -160,7 +160,8 @@ export async function POST(req: NextRequest) {
       // 🚨 บันทึกข้อมูลวิจัย (Research Data) แพ็กคู่ไปกับผลลัพธ์ 🚨
       energy_id: energyId,
       energy_name: energyName,
-      energy_keywords: energyKeywords
+      energy_keywords: energyKeywords,
+      behavioral_metrics: behavioralMetrics || {}
     });
 
     // 🚨 ═══ 4.5 บันทึก Flags + Clinical Signals ═══ 🚨
