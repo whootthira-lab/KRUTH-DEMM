@@ -70,6 +70,9 @@ function QuizPageInner() {
   const [org, setOrg] = useState(''); const [province, setProvince] = useState('');
   const [pdpa, setPdpa] = useState(false); const [regErr, setRegErr] = useState('');
   const [regLoading, setRegLoading] = useState(false);
+  const [occupation, setOccupation] = useState('');
+  const [specialSkills, setSpecialSkills] = useState('');
+  const [interests, setInterests] = useState('');
   const [provinces, setProvinces] = useState<string[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
 
@@ -538,7 +541,10 @@ function QuizPageInner() {
           deviceType: getDeviceType(), browser: getBrowser(),
           referrerUrl: typeof document !== 'undefined' ? document.referrer : '',
           organization: orgNameToSend,
-          lineUserId: lineUserId
+          lineUserId: lineUserId,
+          occupation,
+          specialSkills,
+          interests
         }),
       });
       const data = await res.json();
@@ -884,6 +890,39 @@ function QuizPageInner() {
               }`}
             />
           )}
+
+          <label className="text-xs font-semibold block mt-3 mb-1">
+            อาชีพ
+          </label>
+          <input value={occupation}
+            onKeyDown={handleTypingKeydown}
+            onChange={e => { setOccupation(e.target.value); if(e.target.value) setKeypressCount(c => c + 1); }}
+            placeholder="เช่น นักเรียน, ข้าราชการ, ค้าขาย (ระบุได้มากกว่าหนึ่ง)"
+            className={`w-full border rounded-lg p-2 text-sm ${
+              accessibleMode.highContrast ? 'bg-black border-yellow-400 text-yellow-400' : 'bg-white'
+            }`} />
+
+          <label className="text-xs font-semibold block mt-3 mb-1">
+            ความถนัดหรือทักษะพิเศษ
+          </label>
+          <input value={specialSkills}
+            onKeyDown={handleTypingKeydown}
+            onChange={e => { setSpecialSkills(e.target.value); if(e.target.value) setKeypressCount(c => c + 1); }}
+            placeholder="เช่น วาดรูป, ร้องเพลง, ภาษาต่างประเทศ, การเขียนโปรแกรม"
+            className={`w-full border rounded-lg p-2 text-sm ${
+              accessibleMode.highContrast ? 'bg-black border-yellow-400 text-yellow-400' : 'bg-white'
+            }`} />
+
+          <label className="text-xs font-semibold block mt-3 mb-1">
+            ความสนใจ
+          </label>
+          <input value={interests}
+            onKeyDown={handleTypingKeydown}
+            onChange={e => { setInterests(e.target.value); if(e.target.value) setKeypressCount(c => c + 1); }}
+            placeholder="เช่น ศิลปะ, แฟชั่น, การท่องเที่ยว, กีฬา, เทคโนโลยี"
+            className={`w-full border rounded-lg p-2 text-sm ${
+              accessibleMode.highContrast ? 'bg-black border-yellow-400 text-yellow-400' : 'bg-white'
+            }`} />
 
           {/* PDPA */}
           <div className={`rounded-lg p-3 mt-4 text-[0.68rem] leading-relaxed max-h-28 overflow-y-auto border ${

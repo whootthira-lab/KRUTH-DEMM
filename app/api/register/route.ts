@@ -4,7 +4,11 @@ import { generateDVJId, calcThaiElement, calcChineseElement } from '@/lib/scorin
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { band, day, month, year, fname, lname, idcard, gender, province, referrerId, referralSource, organization, lineUserId } = body;
+  const { 
+    band, day, month, year, fname, lname, idcard, gender, province, 
+    referrerId, referralSource, organization, lineUserId,
+    occupation, specialSkills, interests 
+  } = body;
 
   if (!band || !day || !month || !year || !fname || !lname || !gender) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 });
@@ -69,6 +73,9 @@ export async function POST(req: NextRequest) {
     pdpa_consent: true,
     device_type: body.deviceType || null,
     browser: body.browser || null,
+    occupation: occupation || null,
+    special_skills: specialSkills || null,
+    interests: interests || null,
   });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
